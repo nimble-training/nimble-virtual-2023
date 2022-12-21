@@ -1,0 +1,24 @@
+---
+title: "Programming with automatic differentiation"
+subtitle: "NIMBLE 2023 Virtual Workshop"
+author: "NIMBLE Development Team"
+date: "January 2023"
+output:
+  slidy_presentation: default
+  beamer_presentation: default
+---
+<style>
+slides > slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+</style>
+
+```{r setup, include=FALSE}
+library(nimble)
+source(file.path("..", "examples", "DeerEcervi", "load_DeerEcervi.R"), 
+       chdir = TRUE)
+```
+
+# Overview
+
