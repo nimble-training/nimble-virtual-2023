@@ -1,0 +1,17 @@
+#! /usr/local/bin/Rscript
+# usage:
+# ./make_slides overview
+# cd modules; ../make_slides nimble_bugs
+# etc.
+# make_slides2 uses /usr/local/bin/Rscript (OS X) instead of /usr/bin/Rscript (linux).
+
+library(rmarkdown)
+
+source <- commandArgs(trailingOnly = TRUE)
+
+if (file.exists(source)){
+    render(source, 'slidy_presentation') 
+#    render(source, 'html_document', gsub('.Rmd','_alt.html',source))
+} else {
+    cat("Error: ", source, " does not exist.\n")
+}
