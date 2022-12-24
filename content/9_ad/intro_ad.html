@@ -1075,8 +1075,8 @@ at it:</p>
 <span id="cb44-27"><a href="#cb44-27" aria-hidden="true" tabindex="-1"></a>                    <span class="at">sex =</span> DeerEcervi<span class="sc">$</span>Sex,</span>
 <span id="cb44-28"><a href="#cb44-28" aria-hidden="true" tabindex="-1"></a>                    <span class="at">farm_ids =</span> DeerEcervi<span class="sc">$</span>farm_ids)</span></code></pre></div>
 </div>
-<div id="fourth-exampe-laplace-approximation" class="slide section level1">
-<h1>Fourth exampe: Laplace approximation</h1>
+<div id="fourth-example-laplace-approximation-1" class="slide section level1">
+<h1>Fourth example: Laplace approximation</h1>
 <p>Make Deer E. cervi model with derivative tools built.</p>
 <div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>DEmodel <span class="ot">&lt;-</span> <span class="fu">nimbleModel</span>(DEcode,</span>
 <span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>                       <span class="at">data =</span> DEdata,</span>
@@ -1094,7 +1094,7 @@ at it:</p>
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-1" class="slide section level1">
+<div id="fourth-example-laplace-approximation-2" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>Here is a nimbleFunction for a basic univariate Laplace
 approximation.</p>
@@ -1159,7 +1159,7 @@ approximation.</p>
 <span id="cb53-59"><a href="#cb53-59" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;negLogLik&#39;</span></span>
 <span id="cb53-60"><a href="#cb53-60" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
-<div id="fourth-example-laplace-approximation-2" class="slide section level1">
+<div id="fourth-example-laplace-approximation-3" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>Try the Laplace approximation for the first random effect.</p>
 <div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>RE_node <span class="ot">&lt;-</span> <span class="st">&quot;farm_effect[1]&quot;</span></span>
@@ -1172,7 +1172,7 @@ approximation.</p>
 <div class="sourceCode" id="cb56"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a>ctest<span class="sc">$</span><span class="fu">Laplace</span>()</span></code></pre></div>
 <pre><code>## [1] -10.92875</code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-3" class="slide section level1">
+<div id="fourth-example-laplace-approximation-4" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>What is missing from this simple example?</p>
 <ul>
@@ -1183,7 +1183,7 @@ to be automatic (but customizable).</li>
 model parameters. This is a complicated problem because the gradient of
 the Laplace approximation involves third derivatives.</li>
 <li>We can consider various ways to arrange the different derivatives
-using double-taping schemes.</li>
+for efficiency using double-taping schemes.</li>
 <li>We can avoid recalculating the value when obtaining the
 gradient.</li>
 <li>We need various error trapping and robustness checks.</li>
@@ -1191,12 +1191,16 @@ gradient.</li>
 constraints on valid values (e.g. variance &gt; 0).</li>
 </ul>
 <p>The full-blown Laplace approximation with all of these features is in
-the AD version of `nimble``.</p>
+the AD version of <code>nimble</code>.</p>
+<ul>
+<li>Future work may include different choices of optimization
+methods.</li>
+</ul>
 </div>
 <div id="fourth-example-laplace-approximation-skip-this-slide" class="slide section level1">
 <h1>Fourth example: Laplace approximation (Skip this slide)</h1>
 <p>This slide shows use of the fully built Laplace approximation to
-check above demostration code. We don’t need to go through it.</p>
+check the demonstration code above. We don’t need to go through it.</p>
 <div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>param_nodes <span class="ot">&lt;-</span> DEmodel<span class="sc">$</span><span class="fu">getNodeNames</span>(<span class="at">topOnly =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>DE_Laplace <span class="ot">&lt;-</span> <span class="fu">buildLaplace</span>(DEmodel, <span class="at">paramNodes =</span> param_nodes,</span>
 <span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">randomEffectsNodes =</span> RE_node,</span>
@@ -1214,17 +1218,21 @@ check above demostration code. We don’t need to go through it.</p>
 <div class="sourceCode" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>param_values <span class="ot">&lt;-</span> <span class="fu">values</span>(C_DEmodel, param_nodes)</span>
 <span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace<span class="sc">$</span><span class="fu">Laplace</span>(param_values)</span></code></pre></div>
 <pre><code>## [1] -10.92875</code></pre>
+<div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="co"># See which parameters these correspond to:</span></span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>param_nodes</span></code></pre></div>
+<pre><code>## [1] &quot;sex_int[1]&quot;     &quot;sex_int[2]&quot;     &quot;length_coef[1]&quot; &quot;length_coef[2]&quot;
+## [5] &quot;farm_sd&quot;</code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-4" class="slide section level1">
+<div id="fourth-example-laplace-approximation-5" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>Use the fully built Laplace approximation, handling all the random
 effects and maximizing the Laplace-approximated log likelihood.</p>
-<div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>DE_Laplace <span class="ot">&lt;-</span> <span class="fu">buildLaplace</span>(DEmodel)</span>
-<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(DE_Laplace, <span class="at">project =</span> DEmodel)</span></code></pre></div>
+<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>DE_Laplace <span class="ot">&lt;-</span> <span class="fu">buildLaplace</span>(DEmodel)</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(DE_Laplace, <span class="at">project =</span> DEmodel)</span></code></pre></div>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>LaplaceMLE <span class="ot">&lt;-</span> C_DE_Laplace<span class="sc">$</span><span class="fu">LaplaceMLE</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>LaplaceMLE <span class="ot">&lt;-</span> C_DE_Laplace<span class="sc">$</span><span class="fu">LaplaceMLE</span>()</span></code></pre></div>
 <pre><code>## Warning: optim does not converge for the inner optimization of Laplace approximation
 ## Warning: optim does not converge for the inner optimization of Laplace approximation
 ## Warning: optim does not converge for the inner optimization of Laplace approximation
@@ -1233,20 +1241,20 @@ effects and maximizing the Laplace-approximated log likelihood.</p>
 ## Warning: optim does not converge for the inner optimization of Laplace approximation
 ## Warning: optim does not converge for the inner optimization of Laplace approximation</code></pre>
 <pre><code>## Warning in C_DE_Laplace$LaplaceMLE(): Hessian computation is not implemented</code></pre>
-<div class="sourceCode" id="cb69"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace<span class="sc">$</span><span class="fu">inverseTransform</span>(LaplaceMLE<span class="sc">$</span>par)</span></code></pre></div>
+<div class="sourceCode" id="cb71"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace<span class="sc">$</span><span class="fu">inverseTransform</span>(LaplaceMLE<span class="sc">$</span>par)</span></code></pre></div>
 <pre><code>## [1] 0.93958594 1.56417418 0.03897847 0.07483991 1.54687755</code></pre>
 <p>Notice the <code>inverseTransform</code> step. We will likely change
 this behavior in the future so that LaplaceMLE returns the
 inverse-transformed parameters.</p>
 </div>
-<div id="fourth-example-laplace-approximation-5" class="slide section level1">
+<div id="fourth-example-laplace-approximation-6" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>Since this is a GLMM, we can compare to a specialized implementation
 of Laplace approximation. We’ll use <code>lme4</code>.</p>
-<div class="sourceCode" id="cb71"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span></code></pre></div>
+<div class="sourceCode" id="cb73"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span></code></pre></div>
 <pre><code>## Loading required package: Matrix</code></pre>
-<div class="sourceCode" id="cb73"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>lme4_fit <span class="ot">&lt;-</span> <span class="fu">glmer</span>(Ecervi_01 <span class="sc">~</span> ctrLength<span class="sc">*</span>fSex <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> fFarm), <span class="at">family =</span> binomial, <span class="at">data =</span> DeerEcervi)</span>
-<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lme4_fit)</span></code></pre></div>
+<div class="sourceCode" id="cb75"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a>lme4_fit <span class="ot">&lt;-</span> <span class="fu">glmer</span>(Ecervi_01 <span class="sc">~</span> ctrLength<span class="sc">*</span>fSex <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> fFarm), <span class="at">family =</span> binomial, <span class="at">data =</span> DeerEcervi)</span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lme4_fit)</span></code></pre></div>
 <pre><code>## Generalized linear mixed model fit by maximum likelihood (Laplace
 ##   Approximation) [glmerMod]
 ##  Family: binomial  ( logit )
@@ -1280,21 +1288,22 @@ of Laplace approximation. We’ll use <code>lme4</code>.</p>
 ## fSex2       -0.189  0.238       
 ## ctrLngth:S2  0.091 -0.514  0.232</code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-6" class="slide section level1">
+<div id="fourth-example-laplace-approximation-7" class="slide section level1">
 <h1>Fourth example: Laplace approximation</h1>
 <p>How do the parameters match between <code>nimble</code> and
 <code>lme4</code> results?</p>
 <p><code>lme4</code> is using treatment contrasts (Sex1 is the
 “reference” group and Sex2 parameters are differences from Sex1).</p>
 <ul>
-<li>First parameter is the Sex1 intercept for both.</li>
-<li>Second parameter from <code>nimble</code> is the Sex2 intercept, so
-it is <code>(Intercept)</code> + <code>fSex2</code> from
+<li>First parameter from <code>nimble</code> is the Sex1 intercept,
+which is the <code>(Intercept)</code> from <code>lme4</code>.</li>
+<li>Second parameter from <code>nimble</code> is the Sex2 intercept,
+which is <code>(Intercept)</code> + <code>fSex2</code> from
 <code>lme4</code>.</li>
 <li>Third parameter from <code>nimble</code> is the Sex1 coefficient for
 <code>ctrLength</code>.</li>
 <li>Fourth parameter from <code>nimble</code> is the Sex2 coefficient
-for <code>ctrLength</code>, so it is <code>ctrLength</code> +
+for <code>ctrLength</code>, which is <code>ctrLength</code> +
 <code>ctrLength:fSex2</code> from <code>lme4</code>.</li>
 <li>Fifth parameter from <code>nimble</code> is the farm-effect standard
 deviation.</li>

@@ -377,7 +377,7 @@ DEconstants <- list(num_farms = 24,
                     farm_ids = DeerEcervi$farm_ids)
 ```
   
-# Fourth exampe: Laplace approximation
+# Fourth example: Laplace approximation
 
 Make Deer E. cervi model with derivative tools built.
 
@@ -477,16 +477,18 @@ What is missing from this simple example?
 * We want determination of random effects nodes and calculation nodes to be automatic (but customizable).
 * We need to handle scalar or vector random effects.
 * We need to maximize the Laplace approximation with respect to the model parameters.  This is a complicated problem because the gradient of the Laplace approximation involves third derivatives.
-* We can consider various ways to arrange the different derivatives using double-taping schemes.
+* We can consider various ways to arrange the different derivatives for efficiency using double-taping schemes.
 * We can avoid recalculating the value when obtaining the gradient.
 * We need various error trapping and robustness checks.
 * We need to handle parameters and/or random effects that have constraints on valid values (e.g. variance > 0).
 
-The full-blown Laplace approximation with all of these features is in the AD version of `nimble``.
+The full-blown Laplace approximation with all of these features is in the AD version of `nimble`.
+
+* Future work may include different choices of optimization methods.
 
 # Fourth example: Laplace approximation (Skip this slide)
 
-This slide shows use of the fully built Laplace approximation to check above demostration code.  We don't need to go through it.
+This slide shows use of the fully built Laplace approximation to check the demonstration code above.  We don't need to go through it.
 
 ```{r, eval=eval}
 param_nodes <- DEmodel$getNodeNames(topOnly = TRUE)
@@ -496,6 +498,8 @@ DE_Laplace <- buildLaplace(DEmodel, paramNodes = param_nodes,
 C_DE_Laplace <- compileNimble(DE_Laplace, project = DEmodel)
 param_values <- values(C_DEmodel, param_nodes)
 C_DE_Laplace$Laplace(param_values)
+# See which parameters these correspond to:
+param_nodes
 ```
 
 # Fourth example: Laplace approximation
@@ -527,8 +531,8 @@ How do the parameters match between `nimble` and `lme4` results?
 
 `lme4` is using treatment contrasts (Sex1 is the "reference" group and Sex2 parameters are differences from Sex1).
 
-* First parameter is the Sex1 intercept for both.
-* Second parameter from `nimble` is the Sex2 intercept, so it is `(Intercept)` + `fSex2` from `lme4`.
+* First parameter from `nimble` is the Sex1 intercept, which is the `(Intercept)` from `lme4`.
+* Second parameter from `nimble` is the Sex2 intercept, which is `(Intercept)` + `fSex2` from `lme4`.
 * Third parameter from `nimble` is the Sex1 coefficient for `ctrLength`.
-* Fourth parameter from `nimble` is the Sex2 coefficient for `ctrLength`, so it is `ctrLength` + `ctrLength:fSex2` from `lme4`.
+* Fourth parameter from `nimble` is the Sex2 coefficient for `ctrLength`, which is `ctrLength` + `ctrLength:fSex2` from `lme4`.
 * Fifth parameter from `nimble` is the farm-effect standard deviation.
