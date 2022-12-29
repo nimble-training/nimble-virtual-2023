@@ -6,6 +6,10 @@ date: "January 2023"
 output:
   slidy_presentation: default
   beamer_presentation: default
+pandoc_args:
+  colorlinks: true
+  linkcolor: red
+  urlcolor: red
 ---
 <style>
 slides > slide {
@@ -18,7 +22,517 @@ slides > slide {
 library(nimble)
 source(file.path("..", "examples", "DeerEcervi", "load_DeerEcervi.R"), 
        chdir = TRUE)
+eval = TRUE
 ```
 
-# Overview
+# Why derivatives?
 
+Many algorithms require derivatives to work or work well.
+
+* Finding function maximum or minimum (aka optimization)
+* Hamiltonian Monte Carlo (HMC; a kind of MCMC sampler)
+* Other kinds of MCMC samplers, e.g. Langevin.
+* Laplace approximation
+
+    * Starts with an optimization.
+    * Then requires matrix of second derivatives (Hessian)
+    
+* Adaptive Gaussian quadrature (builds upon Laplace approx.)
+
+# How do computers get derivatives?
+
+Example function: 
+
+* $y = e^{x^2}$. 
+* $\frac{dy}{dx} = 2x e^{x^{2}} = 2xy$. 
+
+Derivative methods:
+
+1. Hard-coded analytic function: Developer codes `2 * x * exp(x^2)`
+2. Symbolic algebra: Code processes `exp(x^2)` into `2 * x * exp(x^2)`
+3. Finite-element approximation: $\frac{dy}{dx} \approx \frac{e^{(x+\delta)^{2}} - e^{{x^{2}}}}{\delta}$, for some small value of $\delta$ (hard to choose in general).  Code calls function once with input $x$ and once with input $x+\delta$.
+4. **Automatic (or "Algorithmic") Differentiation:**: Carry derivative information through all math operators, i.e. `^` and `exp` in $e^{{x^{2}}} =$ `exp(x^2)`.
+
+# Automatic Differentiation (AD)
+
+Steps to compute $y = e^{x^2}$ (**value**) for x = 3.0:
+
+1. $x^{2} = 3^2 \rightarrow 9$.
+2. $e^{x^{2}} = e^9 \rightarrow 8103.1$.
+
+Steps to compute $\frac{dy}{dx}$ (using chain rule): *Forward mode*, i.e. inner derivatives first.
+
+1. $\frac{d(x^{2})}{dx} = 2x = 2 \times 3 \rightarrow 6$.
+2. $\frac{d(e^{x^2})}{dx} = \frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = e^{9} \times 6 = 8103.1 \times 6 \rightarrow 48618.6$.
+
+Steps to compute $\frac{dy}{dx}$ (using chain rule): *Reverse mode*, i.e. outer derivatives first.
+
+1. $\frac{d(e^{x^2})}{d(x^{2})} = e^9 \rightarrow 8103.1$.
+2. $\frac{d(e^{x^2})}{dx} = \frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = 8103.1 \times 2x = 8103.1 \times 6 \rightarrow 48618.6$
+
+# Some general points about AD 
+
+* AD works by stepping through the same sequence of operations multiple times, tracking different information each time.
+* AD can sometimes be *more efficient* than using the derivative equations explicitly.  E.g. $e^{9} = 8103.1$ was calculated and can be re-used.
+* AD can be iterated to obtain arbitrary-order derivatives.  Lower-order derivatives must be done before higher-order derivatives.
+* Forward and reverse modes are each more efficient for different kinds of problems, depending on number of inputs and outputs (details not discussed here).
+* Operations such as matrix multiplication, matrix inversion, matrix solving or others can be implemented with matrix AD operations (rather than relying on potentially long sequences of scalar operations, which can be slow for AD).
+
+# NIMBLE adopts the CppAD C++ library for AD 
+
+* Huge credit to [<span style="color:blue">CppAD</span>](https://coin-or.github.io/CppAD/html/CppAD.html).
+* Written by Brad Bell at the University of Washington.
+* CppAD is also used by Template Model Builder (TMB).
+* CppAD is general and efficient.
+* We have written some specialized handling for some cases ("atomic" operators, in CppAD terminology).
+* CppAD can trace derivatives through arbitrary function calls.
+* NIMBLE's use of CppAD involves deep changes in everything, not just calling a few extra functions.
+* NIMBLE with CppAD can give derivatives of arbitrary model calculations and/or nimbleFunction calculations.
+* Care is required for any conditional steps in functions, such as if-then-else or for-loops.  Normally, conditional branching and looping is "baked in" to AD calculations.  This is discussed more later.
+
+# Some terminology for AD in NIMBLE (adapted from CppAD)
+
+* Orders 0, 1, and 2 are called "Value", "Jacobian" (or "Gradient"), and "Hessian", respectively.
+* We say that operations are *recorded* onto a *tape*, which is replayed to obtain values (0th order) and/or derivatives (1st and 2nd order).
+* We can take *derivatives of derivatives*.  This involves making a *tape of the replaying of a tape*.
+
+    * We call this **double-taping** or **meta-taping**.
+
+* Double-taping can improve efficiency.
+* Double-taping can give derivatives of order > 2. 
+
+# Status of AD in NIMBLE 
+
+* Use of AD features are "opt-in", so by default everything should work normally, i.e. without AD.
+* We made a ["beta release" or "release candidate"](https://r-nimble.org/ad-beta) in summer 2022.
+* We plan to release AD in a regular version of `nimble` soon.
+* A draft chapter of our User Manual on AD is [here](https://r-nimble.org/ADuserManual_draft/chapter_AD.html).
+* Laplace approximation is currently planned to be included in `nimble` with AD.
+* Hamiltonian Monte Carlo (HMC) samplers will be in the separate package [`nimbleHMC`](https://github.com/nimble-dev/nimbleHMC), which is also available now as a beta release.
+
+# First example: Derivatives in a nimbleFunction
+
+```{r, eval=eval}
+nf1 <- nimbleFunction(
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double()) {
+      d <- derivs(foo(x), wrt = "x", order = 0:2)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'foo'
+)
+```
+
+# First example: Derivatives in a nimbleFunction
+
+Make an object (instance) of nf1:
+```{r, eval=eval}
+nf1obj <- nf1()
+```
+
+Uncompiled execution:
+```{r, eval=eval}
+nf1obj$derivs_foo(3)
+nf1obj$foo(3) # for comparison of value
+```
+
+# First example: Derivatives in a nimbleFunction
+Compiled execution:
+```{r, eval=eval}
+cnf1obj <- compileNimble(nf1obj)
+cnf1obj$derivs_foo(3)
+```
+
+# Understanding derivative outputs:
+
+* Define $n$ = number of inputs and $m$ = number of outputs.
+* **value** is a vector of length $m$.
+* **jacobian** is an $m \times n$ matrix ($m$ rows and $n$ columns).
+* **hessian** is an $n \times n \times m$ array.
+* Notice the output index is the *first* index in *jacobian* but the *last* index in *hessian*.
+* First two indices of *hessian* are interchangeable due to symmetry of partial derivatives.
+* You can omit lower-orders (e.g., use `order = 1` for the jacobian only, omitting the value), but lower orders *will be calculated* in order to obtain higher orders.
+* `ADNimbleList()` is a pre-defined *nimbleList* type with elements `value`, `jacobian`, and `hessian`.
+
+# Second example: Derivatives of model log probabilities
+
+Make a simple model.
+
+```{r, eval=eval}
+model_code <- nimbleCode({
+  y ~ dnorm(mean = mu, sd = sigma)
+  mu <- intercept + slope * x
+  intercept ~ dnorm(0, sd = 1000)
+  sigma ~ dunif(0, 10)
+})
+m <- nimbleModel(model_code,
+                 inits = list(intercept = 1.2, slope = 0.5,
+                              sigma = 0.7),
+                 data = list(y = 6),
+                 constants = list(x = 10),
+                 buildDerivs = TRUE, # ALLOW DERIVATIVES FOR THIS MODEL
+                 )
+```
+
+# Second example: Derivatives of model log probabilities
+
+Write a nimbleFunction to get derivatives of model$calculate.
+
+```{r, eval=eval}
+nf2 <- nimbleFunction(
+  setup = function(model, nodes) {},
+  methods = list(
+    derivs_log_prob = function() {
+      d <- derivs(model$calculate(nodes),
+                  wrt=c("intercept", "slope", "sigma"),
+                  order = 0:2)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  )
+)
+```
+
+# Second example: Derivatives of model log probabilities
+
+Use it uncompiled.
+
+```{r, eval=eval}
+calc_nodes <- m$getDependencies(c("intercept", "slope", "sigma"))
+calc_nodes
+nf2obj <- nf2(m, calc_nodes)
+nf2obj$derivs_log_prob()
+```
+
+# Second example: Derivatives of model log probabilities
+
+Use it compiled.
+
+```{r, eval=eval}
+comp <- compileNimble(m, nf2obj)
+comp$nf2obj$derivs_log_prob()
+```
+
+# More about understanding outputs and testing
+
+* Uncompiled derivatives use finite-element methods from packages `numDeriv` and/or `pracma`.
+
+    * These might not match compiled derivatives exactly due to finite-element approximation.
+    * Uncompiled execution can be slow for large calculations.
+
+* The first compiled call to `derivs` (aka `nimDerivs`) records the AD tape, so it is much slower than later calls.
+* Always test compiled derivatives on new values after the first call.  
+
+    * This checks that values have not been (incorrectly) "baked in" to the AD tape. 
+    * This was not illustrated in first two examples.
+    
+* Model inputs are ordered to match the `wrt` argument, flattened and concatenated.
+
+    * This is essential to use `jacobian` and `hessian` results correctly.
+
+# Third example: Derivatives of model log probabilities with other calculations.
+
+Use the same model as above.  For good measure, make a new copy.
+```{r, eval=eval}
+m2 <- m$newModel()
+```
+
+Say we will provide a vector of `(intercept, slope, log_sigma)` and we need to calculate `sigma = exp(log_sigma)` before using it in the model.
+```{r, eval=eval}
+nf3 <- nimbleFunction(
+  setup = function(model, param_nodes, calc_nodes) {
+    # param_nodes will be c("intercept", "slope", "sigma")
+    updateNodes <- character() # more about these later
+    constantNodes <- "y"
+  },
+  run = function(param_values = double(1)) {
+    # param_values will be (intercept, slope, log_sigma)
+    param_values[3] <- exp(param_values[3])
+    values(model, param_nodes) <<- param_values # The ONLY valid way to put values in a model for AD
+    log_prob <- model$calculate(calc_nodes)
+    return(log_prob)
+    returnType(double())
+  },
+  methods = list(
+    derivs_run = function(param_values = double(1)) {
+      wrt <- 1:length(param_values) # indices, not names
+      ans <- derivs(run(param_values), wrt = wrt,
+                    order = 0:2,
+                    updateNodes = updateNodes,
+                    constantNodes = constantNodes,
+                    model = model)
+      return(ans)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'run'
+) 
+```
+
+# Third example: Derivatives of model log probabilities with other calculations.
+
+Make an object:
+```{r, eval=eval}
+param_nodes <- c("intercept", "slope", "sigma")
+calc_nodes <- m2$getDependencies(param_nodes, self = FALSE) # omit priors, just to make it more interesting
+calc_nodes
+nf3obj <- nf3(m2, param_nodes, calc_nodes)
+```
+
+Use it uncompiled: 
+
+```{r, eval=eval}
+x <- c(1.2, .5, log(0.7))
+nf3obj$derivs_run(x)
+```
+
+# Third example: Derivatives of model log probabilities with other calculations.
+
+Use it compiled:
+
+```{r, eval=eval}
+comp2 <- compileNimble(m2, nf3obj)
+x_tape <- c(1.4, .2, log(0.4))
+comp2$nf3obj$derivs_run(x_tape)
+x <- c(1.2, .5, log(0.7))
+comp2$nf3obj$derivs_run(x)
+```
+
+# Understanding the results
+
+* `values(model, nodes)<-x` is the *only* way to put values into model nodes that will be recorded on the AD tape.  
+
+    * `model$x <- value` and `model[[node]] <- value` will not be recorded and are errors.  They may be supported in the future.
+  
+* In example 3, only derivatives with respect to (wrt) the third input differ from example 2, because example 3 includes `sigma = exp(log_sigma)`.
+* `updateNodes` and `constantNodes` are essential for correct use of the model and correct results.  We will cover these more later.
+* Other points not covered yet include:
+
+    * `reset` argument to `derivs` (aka `nimDerivs`), which resets the AD tape.
+    * `wrt` argument can be indices or names.
+    * What variables and/or steps get "baked in" to AD tapes.
+    * Omitting variables from derivative tracking.
+    * Double-taping.
+    * System for generic parameter transformations.
+    
+# Summary of ways to use AD 
+
+* For calculations outside of a model: `nimDerivs(foo(x), ...)` , i.e. "nimDerivs of foo".
+* For model log probabilities with no other steps: `nimDerivs(model$calculate(...), ...)`, i.e. "nimDerivs of model calculate".
+* For model log probabilities amid other steps: `nimDerivs(foo(x),...)` where `foo(x)` contains `model$calculate(...)`, i.e. "nimDerivs of a function containing model calculate".
+
+# Fourth example: Laplace approximation
+
+Laplace approximation:
+
+* data: $y$
+* random effect: $x$
+* parameters: $\theta$
+* Need: $\int P(y | x, \theta) P(x | \theta) dx$.
+* Approximate by:
+
+  * Find $x^{*}$ that maximizes $P(y | x, \theta) P(x | \theta)$.
+  * Compute the Hessian of $\log(P(y | x, \theta) P(x | \theta))$ at $x = x^{*}$.
+  * Do a calculation with $P(y | x^{*}, \theta) P(x^{*} | \theta)$ and the Hessian.
+  
+# Fourth example: Use Deer E. cervi GLMM
+
+We've used this previously. Here is the code in case we need to look at it:
+
+```{r, eval=FALSE}
+DEcode <- nimbleCode({
+  for(i in 1:2) {
+    # Priors for intercepts and length coefficients for sex = 1 (male), 2 (female)
+    sex_int[i] ~ dnorm(0, sd = 1000)
+    length_coef[i] ~ dnorm(0, sd = 1000)
+  }
+
+  # Priors for farm random effects and their standard deviation.
+  farm_sd ~ dunif(0, 20)
+  for(i in 1:num_farms) {
+    farm_effect[i] ~ dnorm(0, sd = farm_sd)
+  }
+
+  # logit link and Bernoulli data probabilities
+  for(i in 1:num_animals) {
+    logit(disease_probability[i]) <-
+      sex_int[ sex[i] ] +
+      length_coef[ sex[i] ]*length[i] +
+      farm_effect[ farm_ids[i] ]
+    Ecervi_01[i] ~ dbern(disease_probability[i])
+  }
+})
+
+DEconstants <- list(num_farms = 24,
+                    num_animals = 826,
+                    length = DeerEcervi$ctrLength,
+                    sex = DeerEcervi$Sex,
+                    farm_ids = DeerEcervi$farm_ids)
+```
+  
+# Fourth example: Laplace approximation
+
+Make Deer E. cervi model with derivative tools built.
+
+```{r, eval=eval}
+DEmodel <- nimbleModel(DEcode,
+                       data = DEdata,
+                       constants = DEconstants,
+                       inits = DEinits_vals,
+                       buildDerivs = TRUE)
+
+C_DEmodel <- compileNimble(DEmodel)
+```
+
+# Fourth example: Laplace approximation
+
+Here is a nimbleFunction for a basic univariate Laplace approximation.
+
+```{r, eval=eval}
+simple_1D_Laplace <- nimbleFunction(
+  setup = function(model, RE_node, calc_nodes) {
+    derivsInfo <- makeDerivsInfo(model, RE_node, calc_nodes)
+    updateNodes <- derivsInfo$updateNodes
+    constantNodes <- derivsInfo$constantNodes
+  },
+  methods = list(
+    # Calculate -log(P(y | x, theta) P(x | theta)) from input x
+    negLogLik = function(x = double(1)) {
+      values(model, RE_node) <<- x
+      res <- -model$calculate(calc_nodes)
+      return(res)
+      returnType(double())
+    },
+    # Get derivatives of -log(P(y | x, theta) P(x | theta))
+    derivs_negLogLik = function(x = double(1),
+                                order = integer(1)) {
+      ans <- derivs(negLogLik(x), wrt = 1:length(x), order = order,
+                   updateNodes = updateNodes,
+                   constantNodes = constantNodes,
+                   model = model)
+      return(ans)
+      returnType(ADNimbleList())
+    },
+    # Pull out the gradient of -log(P(y | x, theta) P(x | theta))
+    gr_negLogLik = function(x = double(1)) {
+      gr <- derivs_negLogLik(x, order = c(1L))
+      return(gr$jacobian[1,])
+      returnType(double(1))
+    },
+    # Put the pieces together:
+    Laplace = function() {
+      # Use correct value of random effect as initial value
+      # for optimization.
+      x_init <- numeric(length = 1)
+      x_init[1] <- model[[RE_node]]
+      # Do optimization using a conjugate gradient method
+      # that uses the AD gradient.
+      # This is a minimization of the negative log probability
+      optim_result <- optim(par = x_init,
+                            fn = negLogLik, gr = gr_negLogLik,
+                            method = "CG")
+      # Get the value at the maximum, x^*
+      optim_logLik <- -optim_result$value
+      # Get the second derivative at the maximum
+      optim_neg_hessian <- derivs_negLogLik(optim_result$par,
+                                            order = c(2L))
+      log_sigma2 <- -log(optim_neg_hessian$hessian[1,1,1])
+      # Calculate the Laplace approximation
+      Laplace_approx <- optim_logLik + 0.5 * log_sigma2 + 0.5 * log(2*pi)
+      # Leave the model in its original state by replacing the
+      # original value and re-calculating.
+      model[[RE_node]] <<- x_init[1]
+      model$calculate(calc_nodes)
+      return(Laplace_approx)
+      returnType(double())
+    }
+  ),
+  buildDerivs = 'negLogLik'
+)
+```
+
+# Fourth example: Laplace approximation
+
+Try the Laplace approximation for the first random effect.
+
+```{r, eval=eval}
+RE_node <- "farm_effect[1]"
+calc_nodes <- DEmodel$getDependencies(RE_node)
+test <- simple_1D_Laplace(DEmodel, RE_node, calc_nodes)
+ctest <- compileNimble(test, project = C_DEmodel)
+ctest$Laplace()
+```
+
+# Fourth example: Laplace approximation
+
+What is missing from this simple example?
+
+* We want determination of random effects nodes and calculation nodes to be automatic (but customizable).
+* We need to handle scalar or vector random effects.
+* We need to maximize the Laplace approximation with respect to the model parameters.  This is a complicated problem because the gradient of the Laplace approximation involves third derivatives.
+* We can consider various ways to arrange the different derivatives for efficiency using double-taping schemes.
+* We can avoid recalculating the value when obtaining the gradient.
+* We need various error trapping and robustness checks.
+* We need to handle parameters and/or random effects that have constraints on valid values (e.g. variance > 0).
+
+The full-blown Laplace approximation with all of these features is in the AD version of `nimble`.
+
+* Future work may include different choices of optimization methods.
+
+# Fourth example: Laplace approximation (Skip this slide)
+
+This slide shows use of the fully built Laplace approximation to check the demonstration code above.  We don't need to go through it.
+
+```{r, eval=eval}
+param_nodes <- DEmodel$getNodeNames(topOnly = TRUE)
+DE_Laplace <- buildLaplace(DEmodel, paramNodes = param_nodes,
+                           randomEffectsNodes = RE_node,
+                           calcNodes = calc_nodes)
+C_DE_Laplace <- compileNimble(DE_Laplace, project = DEmodel)
+param_values <- values(C_DEmodel, param_nodes)
+C_DE_Laplace$Laplace(param_values)
+# See which parameters these correspond to:
+param_nodes
+```
+
+# Fourth example: Laplace approximation
+
+Use the fully built Laplace approximation, handling all the random effects and maximizing the Laplace-approximated log likelihood.
+
+```{r, eval=eval}
+DE_Laplace <- buildLaplace(DEmodel)
+C_DE_Laplace <- compileNimble(DE_Laplace, project = DEmodel)
+LaplaceMLE <- C_DE_Laplace$LaplaceMLE()
+C_DE_Laplace$inverseTransform(LaplaceMLE$par)
+```
+
+Notice the `inverseTransform` step.  We will likely change this behavior in the future so that LaplaceMLE returns the inverse-transformed parameters.
+
+# Fourth example: Laplace approximation
+
+Since this is a GLMM, we can compare to a specialized implementation of Laplace approximation.  We'll use `lme4`.
+
+```{r, eval=eval}
+library(lme4)
+lme4_fit <- glmer(Ecervi_01 ~ ctrLength*fSex + (1 | fFarm), family = binomial, data = DeerEcervi)
+summary(lme4_fit)
+```
+
+# Fourth example: Laplace approximation
+
+How do the parameters match between `nimble` and `lme4` results?
+
+`lme4` is using treatment contrasts (Sex1 is the "reference" group and Sex2 parameters are differences from Sex1).
+
+* First parameter from `nimble` is the Sex1 intercept, which is the `(Intercept)` from `lme4`.
+* Second parameter from `nimble` is the Sex2 intercept, which is `(Intercept)` + `fSex2` from `lme4`.
+* Third parameter from `nimble` is the Sex1 coefficient for `ctrLength`.
+* Fourth parameter from `nimble` is the Sex2 coefficient for `ctrLength`, which is `ctrLength` + `ctrLength:fSex2` from `lme4`.
+* Fifth parameter from `nimble` is the farm-effect standard deviation.
