@@ -17,14 +17,11 @@ slides > slide {
 
 ```{r setup, include=FALSE}
 library(nimble)
-has_compareMCMCs <- require(compareMCMCs)
-if(!has_compareMCMCs)
-  warning("This Rmd file uses package compareMCMCs from github.  Sections using it will be skipped.")
+library(compareMCMCs)
 has_rjags <- require(rjags)
 if(!has_rjags)
   warning("This Rmd file uses package rjags.  Sections using it will be skipped.")
 doComparisons <- TRUE
-runExercise <- FALSE
 ```
 
 # Overview
@@ -44,7 +41,7 @@ Some strategies for improving MCMC
     - Rewrite the model to reduce dependencies 
     - Vectorize declarations to improve computational efficiency
     - Marginalize to remove parameters 
- - (Advanced) Write new samplers that take advantage of particular model structures [Module 9b]
+ - (Advanced) Write new samplers that take advantage of particular model structures [Module 10]
 
 # Load the E. cervi example for later:
 
@@ -59,6 +56,7 @@ Sampler choices:
 
 - Sampling standard deviations on the  log scale can help, especially when there is posterior support near 0.
 - Slice sampling can help mix a parameter at some computational cost.
+- Hamiltonian Monte Carlo (HMC) can help mix blocks of parameters (often all parameters at once) but at heavy computational cost.
 - Blocking can help when parameters are correlated *given other parameters*.
     - If parameters are *marginally correlated* but *conditionally independent*, blocking will not help.
     - This occurs if parameters are marginally correlated only because they both depend on something else.
@@ -78,7 +76,7 @@ Centering refers to two issues:
 - Random effects with a mean of zero (non-centered parameterization) versus centered around a mean (centered parameterization).
     - E.g., `farm_effect ~ N(0, sd)` vs. `farm_effect ~ N(mean, sd)`.
     - Theory shows either parameterization can be better, depending on the model and data, but with reasonable amount of data, centered is often better.
-    - However, for HMC, as in Stan, uncentered is generally better!
+    - However, for HMC, uncentered is generally better!
     
 # Back to the E. cervi MCMC
 
@@ -251,13 +249,65 @@ ts.plot(DEsamplesBlock[ , 'length_coef[1]'], main = 'length slope 1')
 
 So the blocking helps a lot, though the farm effects show some oscillations. (A longer run looks fine.)
 
+# What about HMC?
+
+Let's consider HMC. The standard advice with random effects is to use a non-centered parameterization, which basically means writing out things like $ x \sim N(mu, sigma) $ as $ x = mu + sigma * z $ for $ z \sim N(0,1)$.
+
+The original code did add the different terms and have mean zero random effects, so it's already using a partially non-centered parameterization. But it didn't pull out the `farm_sd` parameter.
+
+```{r, fig.cap='', fig.width=12, fig.height=5}
+library(nimbleHMC)
+
+DEcode_hmc <- nimbleCode({
+  for(i in 1:2) {
+    # Priors for intercepts and length coefficients for sex = 1 (male), 2 (female)
+    sex_int[i] ~ dnorm(0, sd = 1000)
+    length_coef[i] ~ dnorm(0, sd = 1000)
+  }
+
+  # Priors for farm random effects and their standard deviation.
+  farm_sd ~ dunif(0, 20)
+  for(i in 1:num_farms) {
+    farm_effect[i] ~ dnorm(0, sd = 1)
+  }
+
+  # logit link and Bernoulli data probabilities
+  for(i in 1:num_animals) {
+    logit(disease_probability[i]) <-
+      sex_int[ sex[i] ] +
+      length_coef[ sex[i] ]*length[i] +
+      farm_sd * farm_effect[ farm_ids[i] ]
+    Ecervi_01[i] ~ dbern(disease_probability[i])
+  }
+})
+
+
+model <- nimbleModel(DEcode_hmc, constants = DEconstants, inits = DEinits_vals, data = DEdata, buildDerivs = TRUE)
+cmodel <- compileNimble(model)
+
+hmc <- buildHMC(model)
+cHMC <- compileNimble(hmc, project = model)
+
+system.time(DEsamplesHMC <- runMCMC(cHMC, niter = 5000, nburnin = 1000))
+
+par(mfrow = c(1,5))
+ts.plot(DEsamplesHMC[ , 'farm_sd'], main = 'farm sd')
+ts.plot(DEsamplesHMC[ , 'farm_effect[1]'], main = 'farm effect 1')
+ts.plot(DEsamplesHMC[ , 'sex_int[1]'], main = 'sex intercept 1')
+ts.plot(DEsamplesHMC[ , 'sex_int[2]'], main = 'sex intercept 2')
+ts.plot(DEsamplesHMC[ , 'length_coef[1]'], main = 'length slope 1')
+```
+
+That mixes well, but notice that it took a lot more time (15 seconds compared to 1-2 second for our previous MCMCs) to get the same number of samples. Later on, we'll properly assess mixing in light of sampling time.
+
+
 # Full comparison, accounting for sampling time
 
 Traceplots and other diagnostics are useful for understanding but for a final decision between approaches we need to account for sampling time. 
 
 ### Make `nimbleMCMCdefs`
 
-```{r, eval=(has_compareMCMCs&doComparisons)}
+```{r, eval=(doComparisons)}
 nimbleMCMCdefs = list(
   nimble_RWblock = function(model) { # Input should be a model
     mcmcConf <- configureMCMC(model)
@@ -283,12 +333,12 @@ nimbleMCMCdefs = list(
                         control = list(sliceAdaptFactorInterval = 20))
     mcmcConf                         # Output should be an MCMC configuration 
   }
-)
+)    
 ```
 
 ### Call `compareMCMCs` for the various NIMBLE cases
 
-```{r, eval = (has_compareMCMCs&doComparisons)}
+```{r, eval = (doComparisons)}
 set.seed(1)
 
 mcmcResults_nimble_ctrRE <- compareMCMCs(
@@ -311,10 +361,44 @@ mcmcResults_nimble_uncLen <- compareMCMCs(
   MCMCs = c('nimble',
             'nimble_slice',
             'nimble_RWblock',    # Name matches nimbleMCMCdefs list name
-            'nimble_AFSSblock'), # Ditto
+            'nimble_AFSSblock'),  # Ditto
   nimbleMCMCdefs = nimbleMCMCdefs,
   MCMCcontrol = list(niter = 50000, burnin = 5000)
 )
+
+```
+
+### Call `compareMCMCs` for HMC (fewer samples) 
+
+
+```{r}
+params <- model$getNodeNames(topOnly = TRUE)
+params <- params[!params %in% model$expandNodeNames('farm_effect')]
+
+nimbleHMCdef =
+  list(nimble_HMC = function(model) {
+    mcmcConf <- configureMCMC(model, nodes = NULL)
+    mcmcConf$addSampler(target = model$getNodeNames(stochOnly = TRUE, includeData = FALSE),
+                               type = 'HMC')
+    mcmcConf
+  }   
+)
+```
+
+```{r, eval=(doComparisons)}
+nimbleOptions(buildModelDerivs = TRUE)
+mcmcResults_nimble_hmc <- compareMCMCs(
+  modelInfo = list(code = DEcode_hmc, 
+                   data = DEdata,
+                   constants = DEconstants, 
+                   inits = DEinits_vals),
+  monitors = params,
+  MCMCs = c('nimble_HMC'),
+  nimbleMCMCdefs = nimbleHMCdef,
+  MCMCcontrol = list(niter = 5000, burnin = 1000)
+)
+nimbleOptions(buildModelDerivs = FALSE)
+
 ```
 
 ### Call `compareMCMCs` for JAGS (uncentered)
@@ -327,7 +411,7 @@ mcmcResults_jags_uncLen <- list()
 mcmcResults_jags_uncLen <- compareMCMCs(
   modelInfo = list(code = DEcode_jags, # JAGS-compatible
                    data = DEdata,
-                   constants = DEconstants_uncLen, # centered
+                   constants = DEconstants_uncLen, 
                    inits = DEinits_vals_uncLen),
   ## monitors ## Use default monitors: top-level parameters
   MCMCs = c('jags'),
@@ -338,31 +422,33 @@ mcmcResults_jags_uncLen <- compareMCMCs(
 ### Combine and visualize results 
 
 ```{r, echo=FALSE, val=doComparisons}
-mcmcResults_ctrRE <- c(mcmcResults_nimble_ctrRE)
-mcmcResults_uncLen <- c(mcmcResults_nimble_uncLen,
+mcmcResults_cenLen <- c(mcmcResults_nimble_ctrRE, mcmcResults_nimble_hmc)
+mcmcResults_uncLen <- c(mcmcResults_nimble_uncLen, 
                  mcmcResults_jags_uncLen) ## These are lists of MCMCresult objects
 
-make_MCMC_comparison_pages(mcmcResults_nimble_ctrRE, 
-                           modelName = "orig_deer_ecervi_ctrRE_results")
+make_MCMC_comparison_pages(mcmcResults_cenLen, 
+                           modelName = "orig_deer_ecervi_cenLen_results")
 make_MCMC_comparison_pages(mcmcResults_uncLen, modelName = "orig_deer_ecervi_uncLen_results")
 ```
 
 ```{r, eval=FALSE}
 # Run this code to generate your own results
-mcmcResults_ctrRE <- c(mcmcResults_nimble_ctrRE)
+mcmcResults_cenLen <- c(mcmcResults_nimble_ctrRE, mcmcResults_nimble_hmc)
 mcmcResults_uncLen <- c(mcmcResults_nimble_uncLen,
                  mcmcResults_jags_uncLen) ## These are lists of MCMCresult objects
 
-make_MCMC_comparison_pages(mcmcResults_nimble_ctrRE, 
-                           modelName = "deer_ecervi_ctrRE_results")
+make_MCMC_comparison_pages(mcmcResults_cenLen, 
+                           modelName = "deer_ecervi_cenLen_results")
 make_MCMC_comparison_pages(mcmcResults_uncLen, modelName = "deer_ecervi_uncLen_results")
 ```
 
 ### Results 
 
-Results that come with these slides are [here for uncentered length covariate](orig_deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate)](orig_deer_ecervi_ctrRE_results.html).
+Results that come with these slides are [here for uncentered length covariate](orig_deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](orig_deer_ecervi_ctrRE_results.html).
 
-Results if you run the code yourself will be [here for uncentered length covariate](deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate)](deer_ecervi_ctrRE_results.html).
+Results if you run the code yourself will be [here for uncentered length covariate](deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](deer_ecervi_ctrRE_results.html).
+
+Note that results will vary by machine and (e.g., for HMC) will vary with the implementation in particular software. Here, HMC didn't perform well after accounting for computational time because of how long the HMC iterations take. Results in Stan might be better as Stan's derivative calculations are somewhat faster than NIMBLE's.
 
 
 # Think like a graph: reducing dependencies
