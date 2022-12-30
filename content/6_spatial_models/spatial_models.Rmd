@@ -482,7 +482,7 @@ expcov <- nimbleFunction(
       for(j in 1:n)
         result[i, j] <- sigma2*exp(-dists[i,j]/rho)
     return(result)
-  }, buildDerivs = list(run = list(ignore = c('i','j','dists'))))
+  }, buildDerivs = list(run = list(ignore = c('i','j'))))
 
 
 calc_fun <- nimbleFunction(     

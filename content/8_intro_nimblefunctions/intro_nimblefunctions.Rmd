@@ -71,7 +71,7 @@ sigma_true <- 0.25
 y <- rnorm(n, b0_true + b1_true*x, sigma_true)
 
 regrModel <- nimbleModel(regrCode, data = list(y = y), constants = list(n = n, x = x),
-                     inits = list(b0 = 1, b1 = 0, sigma = 1))
+                     inits = list(b0 = 1, b1 = 0, sigma = 1), buildDerivs = TRUE)
 ```
 
 ```{r}
@@ -179,8 +179,9 @@ One caveat: we haven't dealt carefully with the constraint that the standard dev
 # Specializing the nimbleFunction to the model
 
 ```{r, regr-specialized}
-rObjective <- objective(regrModel, c('b0', 'b1', 'sigma'))
 cRegrModel <- compileNimble(regrModel)   # remember to compile model first
+
+rObjective <- objective(regrModel, c('b0', 'b1', 'sigma'))
 cObjective <- compileNimble(rObjective, project = regrModel)
 ```
 
@@ -249,5 +250,7 @@ system.time(optC <- optim(c(0, 0, 1), cObjective$fun, gr = cObjective$grad,
 optR
 optC
 ```
+
+So the speed is not any better than without using the gradient, but notice that fewer function evaluations occurred.
 
 Again, we'd want to deal with the constraint on `sigma`. NIMBLE's AD system provides a convenient way to automatically do transformations to unconstrained spaces.
