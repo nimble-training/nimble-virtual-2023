@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE,
 has_ggplot2 <- require(ggplot2)
 has_mcmcplots <- require(mcmcplots)
 has_coda <- require(coda)
-generate_original_results <- TRUE
+generate_original_results <- FALSE
 ```
 
 # What Is NIMBLE?

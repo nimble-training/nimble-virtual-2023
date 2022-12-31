@@ -1,10 +1,12 @@
 ## ----setup, include=FALSE-----------------------------------------------------
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+                      cache = TRUE,
+                      tidy.opts = list(width.cutoff = 60),
+                      tidy = TRUE)
 has_ggplot2 <- require(ggplot2)
 has_mcmcplots <- require(mcmcplots)
 has_coda <- require(coda)
-generate_original_results <- FALSE
+generate_original_results <- TRUE
 
 
 ## -----------------------------------------------------------------------------
@@ -29,6 +31,12 @@ DeerEcervi$fFarm <- factor(DeerEcervi$Farm)
 DeerEcervi$farm_ids <- as.numeric(DeerEcervi$fFarm)
 
 
+## ----eval=has_ggplot2---------------------------------------------------------
+ggplot(data = DeerEcervi, 
+        mapping = aes(x = ctrLength, y = Ecervi_01, color = fSex)) + 
+  geom_point() + 
+  geom_jitter(width = 0, height = 0.1) + 
+  facet_wrap(~Farm)
 
 
 ## -----------------------------------------------------------------------------
@@ -82,7 +90,7 @@ DEmodel$setInits(DEinits())
 
 
 ## -----------------------------------------------------------------------------
-DEmcmc <- buildMCMC(DEmodel)
+DEmcmc <- buildMCMC(DEmodel, enableWAIC = TRUE)
 
 
 ## -----------------------------------------------------------------------------
@@ -92,11 +100,17 @@ cDEmcmc <- compileNimble(DEmcmc, project = DEmodel)
 
 
 ## -----------------------------------------------------------------------------
-cDEmcmc$run(10000)
+DEresults <- runMCMC(cDEmcmc, niter=11000, nburnin=1000, WAIC=TRUE)
 
 
 ## -----------------------------------------------------------------------------
-samples1 <- as.matrix(cDEmcmc$mvSamples)
+# Samples
+samples1 <- DEresults$samples
+
+
+## -----------------------------------------------------------------------------
+# WAIC (Note: there are different flavors of WAIC that can be chosen earlier.)
+WAIC <- DEresults$WAIC
 
 
 ## ----eval=FALSE---------------------------------------------------------------
@@ -106,6 +120,14 @@ samples1 <- as.matrix(cDEmcmc$mvSamples)
 ## mcmcplot(samples1, dir = ".", filename = "Ecervi_samples_mcmcplot")
 
 
+## -----------------------------------------------------------------------------
+WAIC
+
+
+## ----echo=FALSE, eval=(has_mcmcplots & generate_original_results)-------------
+# Run the previous code to generate your own results.
+library(mcmcplots)
+mcmcplot(samples1, dir = ".", filename = "orig_Ecervi_samples_mcmcplot")
 
 
 ## ----eval = FALSE-------------------------------------------------------------
@@ -126,15 +148,15 @@ samples2 <- nimbleMCMC(DEcode,
                        niter = 10000,
                        nburnin = 1000,
                        nchains = 2,
-                       samplesAsCodaMCMC = TRUE)
-summary(samples2) ## from coda
+                       samplesAsCodaMCMC = TRUE,
+                       WAIC = TRUE)
+summary(samples2$samples) ## from coda
+samples2$WAIC
 
 
 ## -----------------------------------------------------------------------------
-samples3 <- runMCMC(cDEmcmc, 
-                    niter = 10000,
-                    nburnin = 1000,
-                    nchains = 2,
-                    samplesAsCodaMCMC = TRUE)
+cDEmcmc$run(niter = 11000, nburnin=1000)
+samples3 <- as.matrix(cDEmcmc$mvSamples)
 summary(samples3)
+cDEmcmc$getWAIC()
 
