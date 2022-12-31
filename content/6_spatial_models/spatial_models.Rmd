@@ -78,6 +78,13 @@ One-at-a-time vs. block sampling: sample $x$ as a vector or sample $x_i|x_{-i}$ 
   - Specified as a vector node
   - NIMBLE uses one-at-a-time sampling
   - Future plans to allow for specifying joint distribution of $x$ with sparse precision matrix and block sampling
+     - Stan provides capability for this:
+        - `https://mc-stan.org/users/documentation/case-studies/icar_stan.html`
+        - `https://osf.io/3ey65/`
+     - HMC may work better for block sampling than block Metropolis
+  - Future plans to allow for specifying joint distribution of $x$ with sparse precision matrix and block sampling
+
+
 
 ### Gaussian process and other continuous models:
 
@@ -85,6 +92,7 @@ One-at-a-time vs. block sampling: sample $x$ as a vector or sample $x_i|x_{-i}$ 
   - Generally done as a vector node
   - User-defined functions and distributions
   - Generally use block sampling
+     - HMC may work better for block sampling than block Metropolis (and remember the uncentered parameterization)
 
 ### Spline models for $x$:
 
@@ -168,12 +176,14 @@ library(CARBayesdata, quietly = TRUE)
 library(sp, quietly = TRUE)
 library(spdep, quietly = TRUE)
 library(classInt)
-data(GGHB.IG)
+## data(GGHB.IG) ## apparently no longer in CARBayesdata
+load('GGHB.IG.Rda')
 data(respiratorydata)
 
-respiratorydata_sp <- merge(x = GGHB.IG, y = respiratorydata, by = "IG", all.x = FALSE)
+respiratorydata_sp <- merge(x = GGHB.IG, y = respiratorydata, by.x = "IG", by.y = "IZ", all.x = FALSE)
 respiratorydata_sp <- spTransform(respiratorydata_sp,
                                   CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
 
 if(FALSE) { 
   # This will produce an image on top of an OpenStreetMap webpage}
@@ -258,12 +268,15 @@ inits <- list(beta = 0, sigma = 1, x = rnorm(nregions))
 model <- nimbleModel(code, constants = constants, data = data, inits = inits)
 cModel <- compileNimble(model)
 
-conf <- configureMCMC(model, monitors = c('beta', 'sigma', 'x'))
+conf <- configureMCMC(model, monitors = c('beta', 'sigma', 'x'),
+     enableWAIC = TRUE)  # We'll discuss WAIC in a bit.
 conf$printSamplers()
 
 MCMC <- buildMCMC(conf)
 cMCMC <- compileNimble(MCMC, project = cModel)
-samples <- runMCMC(cMCMC, niter = 5000, nburnin = 1000, thin = 10)
+output <- runMCMC(cMCMC, niter = 5000, nburnin = 1000, thin = 10, WAIC = TRUE)
+samples <- output$samples
+waic_car <- output$WAIC
 ```
 
 # Results
@@ -439,7 +452,7 @@ In order to improve mixing, we'll customize a tuning parameter for the block ran
 sampler on the latent spatial values.
 
 ```{r}
-conf <- configureMCMC(model)
+conf <- configureMCMC(model, enableWAIC = TRUE)
 conf$addMonitors('x')
 conf$removeSamplers('x[1:134]')
 ## Changing a tunable parameter in the adaptation of RW_block makes a big difference.
@@ -447,24 +460,95 @@ conf$addSampler('x[1:134]', 'RW_block', control = list(adaptFactorExponent = 0.2
 
 MCMC <- buildMCMC(conf)
 cMCMC <- compileNimble(MCMC, project = cModel)
-samples <- runMCMC(cMCMC, niter = 10000, nburnin = 5000, thin = 5)
+system.time(output <- runMCMC(cMCMC, niter = 10000, nburnin = 5000, thin = 5, WAIC = TRUE))
+samples <- output$samples
+waic_gp <- output$WAIC
 ```
 
 Note that mixing in this model is somewhat slow, because of the need to explore the correlated spatial process, `x`, which is generally less effective in non-conjugate settings, such as this one, where the observations are Poisson and the prior for the latent process is normal.
+
+# Trying HMC
+
+We'll also try HMC, since it often does well in problems with a complicated dependence structure (at least on a per iteration basis). We'll need to modify `expcov` to allow for derivatives.
+
+```{r}
+expcov <- nimbleFunction(     
+  run = function(dists = double(2), rho = double(0), sigma = double(0)) {
+    returnType(double(2))
+    n <- dim(dists)[1]
+    result <- matrix(nrow = n, ncol = n, init = FALSE)
+    sigma2 <- sigma*sigma   # calculate once
+    for(i in 1:n)
+      for(j in 1:n)
+        result[i, j] <- sigma2*exp(-dists[i,j]/rho)
+    return(result)
+  }, buildDerivs = list(run = list(ignore = c('i','j'))))
+
+
+calc_fun <- nimbleFunction(     
+  run = function(mu = double(0), cov = double(2), w = double(1)) {
+    returnType(double(1))
+    U <- chol(cov)
+    result <- (mu + t(U) %*% w)[ , 1]   # crossprod() not available
+    return(result)
+  }, buildDerivs = TRUE)
+```
+
+```{r}
+code_hmc <- nimbleCode({
+  mu0 ~ dnorm(0, sd = 100)
+  sigma ~ dunif(0, 100)  # prior for variance components based on Gelman (2006)
+  rho ~ dunif(0, 5)
+  beta ~ dnorm(0, sd = 100)
+  
+  # latent spatial process
+  cov[1:N, 1:N] <- expcov(dists[1:N, 1:N], rho, sigma)
+  x[1:N] <- calc_fun(mu0, cov[1:N, 1:N], w[1:N])  # uncentered parameterization
+  # likelihood
+  lambda[1:N] <- expected[1:N] * exp(beta*z[1:N] + x[1:N])  
+  for(i in 1:N) {
+    y[i] ~ dpois(lambda[i])
+    w[i] ~ dnorm(0, 1)
+  }
+})
+
+model <- nimbleModel(code_hmc, constants = constants, inits = inits, data = data,
+      buildDerivs = TRUE)
+cModel <- compileNimble(model)
+
+library(nimbleHMC)
+hmc <- buildHMC(model, monitors = c(model$getNodeNames(topOnly = TRUE), 'x'))
+cHMC <- compileNimble(hmc, project = model)
+
+system.time(samplesHMC <- runMCMC(cHMC, niter = 1500, nburnin = 750))
+```
+
+That takes a while, which may in part be because of some room for improvement in NIMBLE's AD efficiency with linear algebra calculations.
+
 
 # Results
 
 MCMC mixing could be better (often the case for spatial models), but is not terrible. We'd want to run for longer.
 
-```{r, fig.cap='', fig.width=10, fig.height=6}
+```{r, fig.cap='', fig.width=10, fig.height=12}
 par(mfrow = c(2,3))
 ts.plot(samples[ , 'rho'], main = 'rho')
 ts.plot(samples[ , 'sigma'], main = 'sigma')
 ts.plot(samples[ , 'beta'], main = 'beta')
+ts.plot(samplesHMC[ , 'rho'], main = 'rho')
+ts.plot(samplesHMC[ , 'sigma'], main = 'sigma')
+ts.plot(samplesHMC[ , 'beta'], main = 'beta')
+
+
 ts.plot(samples[ , 'x[5]'], main = 'x[5]')
 ts.plot(samples[ , 'x[50]'], main = 'x[50]')
 ts.plot(samples[ , 'x[100]'], main = 'x[100]')
+ts.plot(samplesHMC[ , 'x[5]'], main = 'x[5]')
+ts.plot(samplesHMC[ , 'x[50]'], main = 'x[50]')
+ts.plot(samplesHMC[ , 'x[100]'], main = 'x[100]')
 ```
+
+The posteriors from HMC seem to be somewhat different from the Metropolis-based sampling. We'll need to look into this to better understand what is happening.  
 
 We can look at the map of the estimated relative risks. Note the scale is very different than of the standardized mortality ratio raw values.
 
@@ -482,7 +566,7 @@ plot(respiratorydata_sp, col = col, border = 'grey', lwd = 0.4)
 
 # Vectorization and alternative samplers
 
-It would make sense to use vectorization here, since we are using a block sampler on `x[1:N]`.
+It would make sense to use vectorization here (as shown for the HMC example above), since we are using a block sampler on `x[1:N]`.
 
 ```
 # Basic vectorization of a deterministic assignment:
@@ -640,6 +724,67 @@ plot(respiratorydata_sp, col = col, border = 'grey', lwd = 0.4)
    - boundary effects
 
 For example, Stoner and Economou (2020; Computational Statistics and Data Analysis; https://arxiv.org/abs/1906.03846) used mgcv-based spline terms in a NIMBLE model for precipitation, handling seasonality with cyclic splines.
+
+# Model selection with WAIC
+
+Some considerations for model selection criteria:
+
+ - There are various quantitative measures for comparing models, often based on trying to estimate how well models will fit new data.
+ - Simply evaluating the log-likelihood won't generally work because of overfitting.
+ - Information criteria such as AIC, DIC, and WAIC attempt to penalize for the flexibility of the model based on the number of parameters in the model.
+ - In a Bayesian model, shrinkage means that the "number of parameters" is not well-defined.
+ - In recent years, WAIC has gained popularity as a more principled approach than DIC.
+
+
+# WAIC: some details
+
+WAIC tries to estimate the expected pointwise log predictive density for a new dataset, $\{\tilde{y}_i\}$:
+
+$$ \sum_{i=1}^n E_{\tilde{y}}(\log p_{post}(\tilde{y}_i)) $$
+
+Two quantities are used:
+
+  1) Pointwise log predictive density in-sample: $\sum_{i=1}^n \log \left(\frac{1}{M} \sum_{j=1}^M p(y_i | \theta^{(j)}) \right)$
+  2) An estimate of the effective number of parameters (number of unconstrained parameters)
+
+The second piece adjusts for the bias from overfitting.
+
+WAIC uses the full posterior, so does not rely on the plug-in predictive density as in DIC.
+
+# WAIC results
+
+Let's compare WAIC for the CAR and GP versions of the spatial modeling.
+
+```{r}
+waic_car
+waic_gp
+```
+
+Interpreting the numerical values:
+
+  - WAIC is on the deviance scale:
+  - Lower is better
+  - AIC penalizes the log-likelihood by two when adding a parameter, to give a sense for the scale of things. 
+  
+Caveats:
+  - These are based on MCMC runs that are likely too short.
+  - Not clear how appropriate basic WAIC is for correlated data.
+  
+# WAIC can be tricky
+
+ - There are different variations on WAIC depending on what predictive distribution is of interest:
+ 
+    - New observations (conditional WAIC, default in NIMBLE)
+         - For example, predicting new E. cervi observations for existing farms
+    - New groups (often represented as a new random effect) (marginal WAIC)
+         - For example, predicting new E. cervi observations for new farms without any data
+
+ - WAIC relies on being able to partition (group) the data into `n` pieces; not clear how to use for spatial or temporally-correlated data and other complicated situations
+    - By default in NIMBLE, observations are treated individually (not grouped), unless you use a multivariate distribution.
+    - You'll can also group the data as desired, e.g., grouping all temporal observations for each patient in a longitudinal study.
+
+* See Gelman, A., J. Hwang, and A. Vehtari. 2014. “Understanding Predictive Information Criteria for Bayesian Models.” Statistics and Computing 24 (6): 997–1016.
+
 
 # Exercise
 

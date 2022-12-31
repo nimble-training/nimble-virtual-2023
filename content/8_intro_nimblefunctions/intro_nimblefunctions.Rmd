@@ -24,9 +24,9 @@ library(nimble)
 
 *nimbleFunctions* are at the heart of NIMBLE. They are the way that algorithms are implemented. They can also be used for
 
- - user-defined BUGS distributions (already seen),
- - user-defined BUGS functions (already seen)
- - user-defined MCMC samplers (Module 9b), and
+ - user-defined distributions (already seen),
+ - user-defined functions (already seen)
+ - user-defined MCMC samplers (Module 10), and
  - compiling parts of R (not shown), without reference to a model.
 
 But their main purpose is providing a way for developers to implement algorithms.
@@ -71,7 +71,7 @@ sigma_true <- 0.25
 y <- rnorm(n, b0_true + b1_true*x, sigma_true)
 
 regrModel <- nimbleModel(regrCode, data = list(y = y), constants = list(n = n, x = x),
-                     inits = list(b0 = 1, b1 = 0, sigma = 1))
+                     inits = list(b0 = 1, b1 = 0, sigma = 1), buildDerivs = TRUE)
 ```
 
 ```{r}
@@ -157,7 +157,7 @@ Plan:
 ```{r, regr-objective, eval}
 objective <- nimbleFunction(
     setup = function(model, nodes) {
-        calcNodes <- model$getDependencies(nodes)
+        calcNodes <- model$getDependencies(nodes, self = FALSE)
         elements <- model$expandNodeNames(nodes, returnScalarComponents = TRUE)
         n <- length(elements)
     },
@@ -179,8 +179,9 @@ One caveat: we haven't dealt carefully with the constraint that the standard dev
 # Specializing the nimbleFunction to the model
 
 ```{r, regr-specialized}
-rObjective <- objective(regrModel, c('b0', 'b1', 'sigma'))
 cRegrModel <- compileNimble(regrModel)   # remember to compile model first
+
+rObjective <- objective(regrModel, c('b0', 'b1', 'sigma'))
 cObjective <- compileNimble(rObjective, project = regrModel)
 ```
 
@@ -194,3 +195,62 @@ optR
 optC
 ```
 
+# Using derivatives of a model
+
+It's not all that helpful in this small example, but one can provide a gradient function to `optim` to potentially speed up the optimization . Let's use NIMBLE's AD capability to do this.
+
+
+```{r, regr-objective-grad, eval}
+objective_with_grad <- nimbleFunction(
+    setup = function(model, nodes) {
+        calcNodes <- model$getDependencies(nodes, self = FALSE)
+        # elements <- model$expandNodeNames(nodes, returnScalarComponents = TRUE)
+        # n <- length(elements)
+        
+        # Set up the additional arguments for nimDerivs when the function
+        #   called includes model$calculate
+        derivsInfo <- makeDerivsInfo(model, nodes, calcNodes)
+        updateNodes <- derivsInfo$updateNodes
+        constantNodes <- derivsInfo$constantNodes
+    },
+    methods = list(
+        fun = function(par = double(1)) {
+             returnType(double(0))
+             # if(length(par) != n)
+             #    stop("Input length does not match number of parameter elements.")
+             values(model, nodes) <<- par   # assignment into non-local (nf) variables
+             ans <- model$calculate(calcNodes)  # local assignment
+             return(ans)
+        },
+        grad = function(par = double(1)) {
+             returnType(double(1))
+             d <- nimDerivs(fun(par), wrt = 1:length(par), order = 1,
+                 model = model, updateNodes = updateNodes, constantNodes = constantNodes)
+             result <- d$jacobian[1, ]
+             return(result)
+        }
+    ), buildDerivs = 'fun'
+)
+```
+
+
+```{r, regr-specialized}
+rObjective <- objective_with_grad(regrModel, c('b0', 'b1', 'sigma'))
+cObjective <- compileNimble(rObjective, project = regrModel)
+```
+
+Now let's try using it. We need to use a derivative-based optimization algorithm such as the BFGS (Newton-like) method rather than a derivative-free method like Nelder-Mead.
+
+```{r, regr-optimize}
+set.seed(1)
+system.time(optR <- optim(c(0, 0, 1), rObjective$fun, gr = rObjective$grad,
+                 method = "BFGS", control = list(fnscale = -1)))
+system.time(optC <- optim(c(0, 0, 1), cObjective$fun, gr = cObjective$grad,
+                 method = "BFGS", control = list(fnscale = -1)))
+optR
+optC
+```
+
+So the speed is not any better than without using the gradient, but notice that fewer function evaluations occurred.
+
+Again, we'd want to deal with the constraint on `sigma`. NIMBLE's AD system provides a convenient way to automatically do transformations to unconstrained spaces.
