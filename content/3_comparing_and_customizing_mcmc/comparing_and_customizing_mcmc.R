@@ -1,4 +1,4 @@
-## ----loadLibs, include=FALSE-------------------------------------------------------------------------------------------
+## ----loadLibs, include=FALSE--------------------------------------------------
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE)
 doMCMC <- TRUE
@@ -16,7 +16,7 @@ if(!has_rjags)
 doComparisons <- FALSE
 
 
-## ----setup-------------------------------------------------------------------------------------------------------------
+## ----setup--------------------------------------------------------------------
 source(file.path("..", "examples", "DeerEcervi", "load_DeerEcervi.R"), 
        chdir = TRUE)
 set.seed(123)
@@ -26,7 +26,7 @@ DEmodel <- nimbleModel(DEcode,
                         inits = DEinits())
 
 
-## ----lmModel, include=FALSE--------------------------------------------------------------------------------------------
+## ----lmModel, include=FALSE---------------------------------------------------
 lmCode <- nimbleCode({
   sigma ~ dunif(0, 20)
   intercept ~ dnorm(0, sd = 100)
@@ -52,11 +52,11 @@ lmModel$setData('y')
 # }
 
 
-## ----show-lm-data------------------------------------------------------------------------------------------------------
+## ----show-lm-data-------------------------------------------------------------
 data.frame(x = lmModel$x, y = lmModel$y)
 
 
-## ----calc-lm-posterior, include=FALSE----------------------------------------------------------------------------------
+## ----calc-lm-posterior, include=FALSE-----------------------------------------
 log_posterior_numerator <- function(params) {
   lmModel$intercept <- params[1]
   lmModel$slope <- params[2]
@@ -82,14 +82,14 @@ library(mvtnorm)
 samples <- rmvnorm(1000, mean = lmCoef[, "Estimate"], sigma = vcov(lmFit))
 
 
-## ----contour-lm-1, echo=FALSE------------------------------------------------------------------------------------------
+## ----contour-lm-1, echo=FALSE-------------------------------------------------
 contour(intercept_grid, slope_grid, llh_surface, 
         levels = optim_map$value - 0.01 - 0:5,
         main = "posterior density contours",
         xlab = "intercept", ylab = "slope")
 
 
-## ----contour-lm-2, echo=FALSE------------------------------------------------------------------------------------------
+## ----contour-lm-2, echo=FALSE-------------------------------------------------
 {
   contour(intercept_grid, slope_grid, llh_surface, 
         levels = optim_map$value - 0.01 - 0:5,
@@ -99,18 +99,32 @@ contour(intercept_grid, slope_grid, llh_surface,
 }
 
 
-## ----mcmcConf----------------------------------------------------------------------------------------------------------
+## ----mcmcConf-----------------------------------------------------------------
 mcmcConf <- configureMCMC(DEmodel)
 mcmcConf$printSamplers()
 
 
+## ----runMCMC, eval=doMCMC-----------------------------------------------------
+# By default, top-level parameters are monitored.
+# Let's get these random effects too. 
+mcmcConf$addMonitors("farm_effect")
+DEmcmc1 <- buildMCMC(mcmcConf)
+ # Example of compiling model and MCMC in one call, which returns a list.
+compiled <- compileNimble(DEmodel, DEmcmc1)
+DEsamples <- runMCMC(compiled$DEmcmc1, niter = 10000, nburnin = 1000)
 
 
+## ----plot-samples, eval=doMCMC------------------------------------------------
+plot(DEsamples[,"length_coef[1]"], type = 'l') ## Happens to mix well
+plot(DEsamples[,"sex_int[1]"], type = 'l')    ## Doesn't mix as well
 
 
+## ----ESS, eval=doMCMC---------------------------------------------------------
+dim(DEsamples) ## Independent samples would have ESS=9000
+effectiveSize(DEsamples)
 
 
-## ----lmConditional, echo=FALSE-----------------------------------------------------------------------------------------
+## ----lmConditional, echo=FALSE------------------------------------------------
 intercept_grid_given_slope <- seq(10.1, 10.6, length = 31)
 llh_surface_given_slope <- apply(matrix(intercept_grid_given_slope), 1, 
                                  function(int) log_posterior_numerator(c(int, 0.2)))
@@ -124,7 +138,7 @@ llh_surface_given_slope <- apply(matrix(intercept_grid_given_slope), 1,
 }
 
 
-## ---- echo=FALSE-------------------------------------------------------------------------------------------------------
+## ---- echo=FALSE--------------------------------------------------------------
 theta1 <- seq(0.5, 5, length = 200)
 targetDist <- 0.1 * dnorm(theta1, 2, 0.5)
 current <- 1.3
@@ -151,7 +165,7 @@ nextTargetDist <- 0.03 * dnorm(theta1, 2.4, 0.2)
 }
 
 
-## ---- echo = FALSE-----------------------------------------------------------------------------------------------------
+## ---- echo = FALSE------------------------------------------------------------
 theta1grid <- seq(0.5, 5, length = 200)
 targetDist <- function(theta1) {0.1 * dnorm(theta1, 2, 0.5)}
 targetDistGrid <- targetDist(theta1grid)
@@ -189,7 +203,7 @@ sliceLegend <- function() {
 }
 
 
-## ---- echo=FALSE-------------------------------------------------------------------------------------------------------
+## ---- echo=FALSE--------------------------------------------------------------
 {
   plot(theta1grid, targetDistGrid, type = 'l', col = 'black',
        main = 'slice sampler',
@@ -203,7 +217,7 @@ sliceLegend <- function() {
 }
 
 
-## ---- echo=FALSE-------------------------------------------------------------------------------------------------------
+## ---- echo=FALSE--------------------------------------------------------------
 {
   plot(theta1grid, targetDistGrid, type = 'l', col = 'black',
        main = 'slice sampler',
@@ -217,7 +231,7 @@ sliceLegend <- function() {
 }
 
 
-## ---- echo=FALSE-------------------------------------------------------------------------------------------------------
+## ---- echo=FALSE--------------------------------------------------------------
 {
   plot(theta1grid, targetDistGrid, type = 'l', col = 'black',
        main = 'slice sampler',
@@ -233,9 +247,27 @@ sliceLegend <- function() {
 }
 
 
+## ---- eval=doMCMC-------------------------------------------------------------
+# Make a fresh copy of the model
+# (in case code is used out of order in this doc).
+DEmodel_copy <- DEmodel$newModel(replicate = TRUE) 
+mcmcConf <- configureMCMC(DEmodel_copy)
+params_for_slice <- "farm_effect[1:6]" # Notice: Not just one node
+mcmcConf$printSamplers(params_for_slice)
+mcmcConf$removeSamplers(params_for_slice) # Nodes will be expanded
+expanded_params_for_slice <- DEmodel_copy$expandNodeNames(params_for_slice)
+expanded_params_for_slice
+for(p in expanded_params_for_slice)
+  mcmcConf$addSampler(target = p,
+                      type = "slice") # automatically looks for nimbleFunction named "slice" or "sampler_slice"
+mcmcConf$printSamplers(params_for_slice)
+mcmc <- buildMCMC(mcmcConf)
+compiled <- compileNimble(DEmodel_copy, mcmc)
+samples <- runMCMC(compiled$mcmc, niter = 10000, nburnin = 1000)
+effectiveSize(samples)
 
 
-## ----------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 nimbleMCMCdefs = list(
   nimble_RWblock = function(model) { # Input should be a model
     mcmcConf <- configureMCMC(model)
@@ -270,7 +302,7 @@ nimbleMCMCdefs = list(
 )
 
 
-## ----------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 DEcode_jags <- nimbleCode({
   for(i in 1:2) {
     length_coef[i] ~ dnorm(0, 1.0E-6) # precisions
@@ -293,22 +325,57 @@ DEcode_jags <- nimbleCode({
 })
 
 
+## ---- eval = (has_compareMCMCs&doComparisons)---------------------------------
+set.seed(123)
+DEinits_vals <- DEinits()
+mcmcResults_nimble <- compareMCMCs(
+  modelInfo = list(code = DEcode, 
+                   data = list(Ecervi_01 = DeerEcervi$Ecervi_01),
+                   constants = DEconstants, # centered
+                   inits = DEinits_vals),
+  # Omit monitors argument to  
+  # use default monitors: top-level parameters
+  MCMCs = c('nimble',
+            'nimble_slice',
+            'nimble_log_sigma',  # Name matches nimbleMCMCdefs list name
+            'nimble_RWblock',    # Ditto
+            'nimble_AFSSblock'), # Ditto
+  nimbleMCMCdefs = nimbleMCMCdefs,
+  MCMCcontrol = list(niter = 40000, burnin = 4000)
+)
 
 
-## ---- eval=FALSE-------------------------------------------------------------------------------------------------------
+## ---- eval=FALSE--------------------------------------------------------------
 ## mcmcResults_nimble[['nimble_log_sigma']]$samples # output not shown
-## mcmcResults_nimble[['nimble_log_sigma']]$metrics$byParameter # output not shown
 
 
-## ---- include=FALSE----------------------------------------------------------------------------------------------------
+## ---- eval=(has_compareMCMCs&doComparisons)-----------------------------------
+mcmcResults_nimble[['nimble_log_sigma']]$metrics$byParameter
+
+
+## ---- include=FALSE-----------------------------------------------------------
 mcmcResults_jags <- list()
 
 
+## ---- eval=(has_rjags&doComparisons)------------------------------------------
+mcmcResults_jags <- compareMCMCs(
+  modelInfo = list(code = DEcode_jags, # JAGS-compatible
+                   data = list(Ecervi_01 = DeerEcervi$Ecervi_01),
+                   constants = DEconstants, # centered
+                   inits = DEinits_vals),
+  ## monitors ## Use default monitors: top-level parameters
+  MCMCs = c('jags'),
+  MCMCcontrol = list(niter = 20000, burnin = 1000)
+)
 
 
+## ---- echo=FALSE, eval=doComparisons------------------------------------------
+# This code is for the comparisons that come with these slides.
+mcmcResults <- c(mcmcResults_nimble, mcmcResults_jags) ## These are lists of MCMCresult objects
+make_MCMC_comparison_pages(mcmcResults, modelName = "orig_deer_ecervi_mcmc_results")
 
 
-## ---- eval=FALSE-------------------------------------------------------------------------------------------------------
+## ---- eval=FALSE--------------------------------------------------------------
 ## # Run this code to generate your own results
 ## mcmcResults <- c(mcmcResults_nimble, mcmcResults_jags) ## These are lists of MCMCresult objects
 ## make_MCMC_comparison_pages(mcmcResults, modelName = "deer_ecervi_mcmc_results")

@@ -215,9 +215,12 @@ Mixing and computation time are both important to MCMC performance.
 Let's get an MCMC sample for the E. cervi example.
 
 ```{r runMCMC, eval=doMCMC}
-mcmcConf$addMonitors("farm_effect") # By default, top-level parameters are monitored. Let's get these random effects too.
+# By default, top-level parameters are monitored.
+# Let's get these random effects too. 
+mcmcConf$addMonitors("farm_effect")
 DEmcmc1 <- buildMCMC(mcmcConf)
-compiled <- compileNimble(DEmodel, DEmcmc1) # Example of compiling model and MCMC in one call, which returns a list.
+ # Example of compiling model and MCMC in one call, which returns a list.
+compiled <- compileNimble(DEmodel, DEmcmc1)
 DEsamples <- runMCMC(compiled$DEmcmc1, niter = 10000, nburnin = 1000)
 ```
 
@@ -261,7 +264,7 @@ Examples of effective sample size
 
 The `effectiveSize` function of library `coda` gives one estimator of ESS.  (Library `mcmcse` has other estimators.)
 
-Each dimension (parameter or state) has a different ESS.  (There are recent methods defining a multivariate ESS.)
+Each dimension (parameter or state) has a different ESS.
 
 ```{r ESS, eval=doMCMC}
 dim(DEsamples) ## Independent samples would have ESS=9000
@@ -303,6 +306,14 @@ Why we don't care as much about mean MCMC efficiency
 
 - It is tempting to think mean (across parameters) of MCMC efficiency is a good measure of overall performance.
 - If some parameters are mixing very well and others very poorly, you should not feel the results are acceptable.
+
+Alterative single number (at the kernel level): Multivariate MCMC efficiency
+=====
+
+- [Vats et al. (2019, *Biometrika*)](https://doi.org/10.1093/biomet/asz002) proposed a *multivariate effective sample size (ESS)*.
+- Multivariate ESS is defined by the rate of convergence of a multivariate confidence region for the Monte Carlo mean of multiple parameters to the actual posterior mean.
+- Multivariate efficiency can be defined as multivariate ESS / computation time.
+- There is some appeal to a multivariate ESS, but really there is no all-purpose performance metric.
 
 
 How MCMC works: samplers compose a kernel
@@ -365,7 +376,7 @@ Code: If $\theta_1$ (`'theta[1]'` in code) is the `target` node for a sampler, t
 
 Different methods require different numbers of calculations of $[Y, \theta]$, so some are slow and some are fast.
 
-Some methods also use derivatives of $[Y, \theta]$.  (These aren't in `nimble` yet but will be in the future.)
+Some methods also use derivatives of $[Y, \theta]$.  These include Hamiltonian Monte Carlo (HMC) and Langevin samplers, both recent additions to NIMBLE (see `nimbleHMC`).
 
 
 Gibbs (conjugate) samplers
@@ -537,6 +548,8 @@ Multivariate random-walk Metropolis-Hastings samplers
 
 - In more dimensions, it is harder to make large proposal steps.
 
+- Control parameter `tries` lets you do multiple propose-accept-reject steps as one sampler.
+
 - Adaptation must determine good scale and correlations for proposals.  Finding these can be slow.
 
 - More important for dimensions with high posterior correlation.
@@ -579,16 +592,17 @@ Other samplers in nimble
 - binary (for Bernoulli variables)
 - categorical (these are *costly*).
 - posterior predictive sampler (for no dependencies)
-- elliptical slice sampler (for certain scalar or multivariate normal cases).
+- elliptical slice sampler (for certain scalar or multivariate normal cases)
 - CAR (conditional autoregression model) normal sampler
 - CAR proper sampler
+- samplers for Bayesian non-parametric (BNP) distributions
 - random-walk multinomial sampler
 - random-walk Dirichlet sampler
 - cross-level sampler
-- `RW_llFunction` A random-walk Metropolis-Hastings that calls any log-likelihood function you provide.
-- Particle MCMC samplers.
+- `RW_llFunction`: a random-walk Metropolis-Hastings that calls any log-likelihood function you provide.
+- Particle MCMC samplers
 
-Other samplers (not currently in nimble)
+Derivative-based samplers (recently available in nimble)
 =====
 
 Samplers that use derivatives of $[\mbox{data, parameters}]$:
@@ -601,7 +615,7 @@ Samplers that use derivatives of $[\mbox{data, parameters}]$:
 
     - Use one gradient evaluation to make a good MH proposal density.
     
-These samplers will be supported in `nimble` in the future  They work now in development versions.
+These samplers are available in the beta-testing version of `nimbleHMC`.
 
 Modifying an MCMC configuration in `nimble`
 =====
@@ -609,7 +623,9 @@ Modifying an MCMC configuration in `nimble`
 Let's replace RW (adaptive random-walk Metropolis-Hastings) samplers with slice samplers in the E. cervi example.
 
 ```{r, eval=doMCMC}
-DEmodel_copy <- DEmodel$newModel(replicate = TRUE) # Fresh copy (in case code is used out of order in this doc)
+# Make a fresh copy of the model
+# (in case code is used out of order in this doc).
+DEmodel_copy <- DEmodel$newModel(replicate = TRUE) 
 mcmcConf <- configureMCMC(DEmodel_copy)
 params_for_slice <- "farm_effect[1:6]" # Notice: Not just one node
 mcmcConf$printSamplers(params_for_slice)
@@ -629,15 +645,15 @@ effectiveSize(samples)
 Using `compareMCMCs`
 =====
 
-`compareMCMCs` is the name of a nearly complete R package available on github for managing performance comparisons among MCMC methods, particularly in `nimble`.  
+`compareMCMCs` is a recently released R package available for managing performance comparisons among MCMC methods, particularly in `nimble`.
 
-- `compareMCMCs` manages mulitple MCMC runs and times steps of preparation (compilation) and sampling.
+- `compareMCMCs` manages multiple MCMC runs and times steps of preparation (compilation) and sampling.
 - It can also run other MCMC "engines" via a plug-in system.  Currently there are plug-ins for JAGS and Stan.  Plug-ins for JAGS and OpenBUGS/WinBUGS (not yet implemented) can use the same model as `nimble` if it is compatible.
 - Choice of performance metrics is extensible by a plug-in system.
 - It can generate comparison figures.  Components included are extensible by a plug-in system.
 - It can convert between different parameter names or parameterizations across MCMC engines.
 
-`compareMCMCs` is the name of a deprecated function in nimble.  It wrapped calls to a lower-level function called `MCMCsuite`.   The new `compareMCMCs` package is a re-designed, re-written take on the goal of managing comparisons among MCMC methods.
+`compareMCMCs` is also the name of a deprecated function in nimble.  The new `compareMCMCs` package is a re-designed, re-written way to manage comparisons among MCMC methods.
 
 We will illustrate `compareMCMCs` by example.
 
@@ -733,7 +749,8 @@ mcmcResults_nimble <- compareMCMCs(
                    data = list(Ecervi_01 = DeerEcervi$Ecervi_01),
                    constants = DEconstants, # centered
                    inits = DEinits_vals),
-  ## monitors ## Use default monitors: top-level parameters
+  # Omit monitors argument to  
+  # use default monitors: top-level parameters
   MCMCs = c('nimble',
             'nimble_slice',
             'nimble_log_sigma',  # Name matches nimbleMCMCdefs list name
@@ -749,7 +766,10 @@ See how the results are stored
 You can access samples and performance metrics easily:
 ```{r, eval=FALSE}
 mcmcResults_nimble[['nimble_log_sigma']]$samples # output not shown
-mcmcResults_nimble[['nimble_log_sigma']]$metrics$byParameter # output not shown
+```
+
+```{r, eval=(has_compareMCMCs&doComparisons)}
+mcmcResults_nimble[['nimble_log_sigma']]$metrics$byParameter
 ```
 
 Call `compareMCMCs` for JAGS (centered)

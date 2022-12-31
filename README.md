@@ -38,7 +38,7 @@ Day 2 (Thursday January 5):
 
 5. (8 am - 9 am) Writing your own functions and distributions 
 6. (9:15 am - 10:30 am) Spatial modeling
-7. (11 am - 1 pm) Ecological models
+7. (11 am - 1 pm) Ecological models (including Hidden Markov Models)
 
 Day 3 (Friday January 6):
 
