@@ -11,7 +11,7 @@ source <- commandArgs(trailingOnly = TRUE)
 
 if (file.exists(source)){
     render(source, 'slidy_presentation') 
-#    render(source, 'html_document', gsub('.Rmd','_alt.html',source))
+    render(source, 'html_document', gsub('.Rmd','_alt.html',source))
 } else {
     cat("Error: ", source, " does not exist.\n")
 }

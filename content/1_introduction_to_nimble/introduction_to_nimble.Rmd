@@ -17,11 +17,13 @@ slides > slide {
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,
-                      cache = TRUE)
+                      cache = TRUE,
+                      tidy.opts = list(width.cutoff = 60),
+                      tidy = TRUE)
 has_ggplot2 <- require(ggplot2)
 has_mcmcplots <- require(mcmcplots)
 has_coda <- require(coda)
-generate_original_results <- FALSE
+generate_original_results <- TRUE
 ```
 
 # What Is NIMBLE?
@@ -124,13 +126,9 @@ GLMM Example: Steps to use NIMBLE:
 
 3. Compile the model and MCMC.
 4. Run the MCMC.
-5. Extract the samples.
+5. Extract the results.
 
-- `nimbleMCMC` does all of this at once.
-- Steps 2a-2c can be combined if no customization is needed.
-- `runMCMC` does steps 4-5
-
-    - manages burn-in, multiple chains, and extracting samples.
+More about NIMBLE's MCMC workflows is shown in [this figure](./NIMBLE_workflow.html) (also available as [pdf](./NIMBLE_workflow.pdf)).
     
 GLMM Example: 1. Build the model
 =====
@@ -149,7 +147,7 @@ DEmodel <- nimbleModel(DEcode,
 GLMM Example: 1b. Set data and inits
 =====
 
-These can be provided to `nimbleModel` or now:
+These can be provided at the `nimbleModel` step (above) or now:
 ```{r}
 DEmodel$setData(list(Ecervi_01 = DeerEcervi$Ecervi_01))
 # This sets the values and *flags the nodes as data*.
@@ -167,7 +165,7 @@ DEmodel$setInits(DEinits())
 GLMM Example: 2. Build the MCMC
 =====
 ```{r}
-DEmcmc <- buildMCMC(DEmodel)
+DEmcmc <- buildMCMC(DEmodel, enableWAIC = TRUE)
 ```
 
 GLMM Example: 3. Compile the model and MCMC.
@@ -184,14 +182,21 @@ cDEmcmc <- compileNimble(DEmcmc, project = DEmodel)
 GLMM Example: 4. Run the MCMC
 =====
 ```{r}
-cDEmcmc$run(10000)
+DEresults <- runMCMC(cDEmcmc, niter=11000, nburnin=1000, WAIC=TRUE)
 ```
 
-GLMM Example: 5. Extract the samples
+GLMM Example: 5. Extract the samples and WAIC
 =====
 ```{r}
-samples1 <- as.matrix(cDEmcmc$mvSamples)
+# Samples
+samples1 <- DEresults$samples
 ```
+
+```{r}
+# WAIC (Note: there are different flavors of WAIC that can be chosen earlier.)
+WAIC <- DEresults$WAIC
+```
+
 
 GLMM Example: Look at results:
 =====
@@ -205,6 +210,10 @@ There are many packages for summarizing and plotting MCMC samples.  NIMBLE does 
 # They won't over-write results that come with these slides.
 library(mcmcplots)
 mcmcplot(samples1, dir = ".", filename = "Ecervi_samples_mcmcplot")
+```
+
+```{r}
+WAIC
 ```
 
 ```{r echo=FALSE, eval=(has_mcmcplots & generate_original_results)}
@@ -232,9 +241,7 @@ Results if you generate the coda pdf will be [here](Ecervi_samples_coda.pdf).
 MCMC workflow in NIMBLE
 =====
 
-Here is a summary of the MCMC workflow in NIMBLE.
-
-[nimbleWorkflow.pdf](nimbleWorkflow.pdf)
+Let's review again the [MCMC workflows in NIMBLE](./NIMBLE_workflow.html) (also available as [pdf](./NIMBLE_workflow.pdf)).
 
 GLMM Example: Doing it all at once with `nimbleMCMC`
 =====
@@ -255,11 +262,13 @@ samples2 <- nimbleMCMC(DEcode,
                        niter = 10000,
                        nburnin = 1000,
                        nchains = 2,
-                       samplesAsCodaMCMC = TRUE)
-summary(samples2) ## from coda
+                       samplesAsCodaMCMC = TRUE,
+                       WAIC = TRUE)
+summary(samples2$samples) ## from coda
+samples2$WAIC
 ```
 
-GLMM Example: Managing the run with `runMCMC`
+GLMM Example: Managing the run at the lowest level with `mcmc$run`"
 =====
 
 Start from:
@@ -267,12 +276,10 @@ Start from:
 - Compiled MCMC
 
 ```{r}
-samples3 <- runMCMC(cDEmcmc, 
-                    niter = 10000,
-                    nburnin = 1000,
-                    nchains = 2,
-                    samplesAsCodaMCMC = TRUE)
+cDEmcmc$run(niter = 11000, nburnin=1000)
+samples3 <- as.matrix(cDEmcmc$mvSamples)
 summary(samples3)
+cDEmcmc$getWAIC()
 ```
 
 Other notes

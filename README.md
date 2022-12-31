@@ -51,7 +51,7 @@ Day 3 (Friday January 6):
 
 Our user manual is [here](https://r-nimble.org/html_manual/cha-welcome-nimble.html).
 
-We have a 'cheatsheet' [here](https://r-nimble.org/documentation).
+We have a 'cheatsheet' and a guide to converting from JAGS or WinBUGS to NIMBLE [here](https://r-nimble.org/documentation).
 
 For the small number of you who are not already familiar with writing models in WinBUGS, JAGS, or NIMBLE, you may want to look through the first module (Introduction to NIMBLE) or Section 5.2 of our user manual in advance.
 
