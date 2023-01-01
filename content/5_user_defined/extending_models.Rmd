@@ -1,0 +1,643 @@
+---
+title: "User-defined distributions and functions"
+subtitle: "NIMBLE 2023 Virtual Workshop"
+author: "NIMBLE Development Team"
+date: "January 2023"
+output:
+  slidy_presentation: default
+  beamer_presentation: default
+---
+<style>
+slides > slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE)
+generate_original_results <- FALSE
+library(nimble)
+```
+
+# Why extend models?
+
+* A model in nimble is a set of ordered calculations with cached (stored) results.
+* Algorithms use a model as a machine: 
+
+    * get and set values
+    * manage calculations and simulations
+    
+* As in lots of coding, different designs can have very different efficiencies.
+* WinBUGS/OpenBUGS/JAGS have closed designs.
+* NIMBLE opens up the model language by making it extensible using `nimbleFunction`s.
+
+# User-defined functions and distributions
+
+User-defined **functions** give new deterministic calculations, e.g.
+
+```{r, eval=FALSE}
+nimbleCode({
+  # other code not shown
+  predicted[i] <- my_function(params[i, 1:p])
+  # other code not shown
+})
+```
+
+User-defined **distributions** return a log probability (density), e.g.
+
+```{r, eval=FALSE}
+nimbleCode({
+  # other code not shown
+  y[i] ~ dmy_distribution(param[i], theta[i])
+  # other code not shown
+})
+```
+
+# User-defined distributions: motivation
+
+#### Why write a user-defined distribution?
+
+ - marginalize over parts of the model (e.g., latent states) for improved efficiency
+ - use distributions that NIMBLE does not provide (e.g., Pareto, beta-binomial, etc.)
+ - non-standard data formats (e.g. sparse data representations)
+
+#### How do I write a user-defined distribution?
+
+- A `nimbleFunction` is defined by providing an R function as an argument.
+- The `nimbleFunction` can be compiled if it is limited to basic math, distributions, for loops, if-then-else, and a few other basics.
+- "compiled" means that nimble will generate C++, compile that, and make it available for use from R.
+- nimbleFunctions can call out to arbitrary R or C/C++ code that you write for full customizability (`nimbleRcall`, `nimbleExternalCall`).
+
+# Example: Cormack-Jolly-Seber (CJS) capture-recapture models
+
+- Individuals are recorded as captured (1) or not-captured (0) on a series of occasions.
+- Data for one individual are a capture history: `y[i, 1:T]` = $[1, 0, 1, 1, 0, 0]$.
+- First entry for each individual must be `1`.
+- Parameters are probability of survival and probability of capture
+- These may be calculated from explanatory variables and/or random effects and may vary by occasion and/or individual.
+- The probability of a capture history given parameters can be derived easily.
+- CJS is a simple case of a hidden Markov model (HMM).
+- Each individual is alive or dead (true state) at each occasion.
+- Dead individuals are never captured (always 0)
+- Alive individuals may be captured (1) or not captured (0).
+- Notice that any 0 followed by a 1 must be "alive", so only trailing 0s have unknown true states.
+
+# Dipper data for CJS model
+
+[Dipper](https://en.wikipedia.org/wiki/Dipper) example:
+
+* 294 Dippers monitored 1981-1987.
+* One of the most classic capture-recapture teaching datasets ever.
+* Thanks to Daniel Turek and [Olivier Gimenez](https://oliviergimenez.github.io/talks/workshop/) for Dipper examples from previous workshops.
+
+# Load the Dipper data
+```{r load_dipper} 
+dipper_example_dir <- file.path("..", "..", "content", "examples","dipper")
+dipper <- read.csv(file.path(dipper_example_dir,"dipper.csv"))
+y <- as.matrix(dipper[ , 1:7])
+first <- apply(y, 1, function(x) min(which(x !=0))) # first capture occasion
+y <- y[ first != 7, ] # remove records with first capture on last occasion
+head(y)
+```
+
+# Code for CJS model using individual latent states
+
+A basic way to write this in model code with individual latent states is:
+
+- `z[i, t]` = true state (1=alive, 0=dead) for individual i at time t.
+- `y[i, t]` = datum (1=captured, 0=not captured) for individual i at time t.
+- `phi` = survival probability from one time to the next.
+- `p` = detection probability if alive.
+
+```{r dipper_basic}
+dipper_code_basic <- nimbleCode({
+  phi ~ dunif(0, 1) # survival prior
+  p ~ dunif(0, 1)   # detection prior
+  # likelihood
+  for (i in 1:N){
+    z[i,first[i]] <- 1
+    for (t in (first[i]+1):T){
+      z[i,t] ~ dbern(phi * z[i,t-1]) # z = 0 for dead, 1 for alive
+      y[i,t] ~ dbern(p * z[i,t])     # y = 0 for not-captured, 1 for captured
+    }}
+  })
+```
+
+# Data, constants and inits for Dipper 
+
+`z[i, t]` will have some data and some unknown (latent) states.
+
+```{r setupInputs}
+dipper_constants <- list(N = nrow(y),      # Individuals
+                         T = ncol(y), # Occasions
+                         first = first)    # vector of first detection occasions
+zinits <- y                  # 0s and 1s
+zdata <- matrix(NA, nrow = nrow(y), ncol = ncol(y))
+# Set z values for non-detections before last detection
+#  to 1, so they will be treated as data.
+for(i in 1:nrow(zinits)) {
+  known_alive <- range(which(zinits[i,] == 1))
+  zinits[i, known_alive[1] : known_alive[2] ] <- NA
+  zdata[i, known_alive[1] : known_alive[2] ] <- 1
+}
+dipper_data <- list(y = y, z = zdata)   # 0s and 1s
+dipper_inits <- function() list(phi = runif(1,0,1),
+                                  p = runif(1,0,1),
+                                  z = zinits)
+head(dipper_data$z)
+head(dipper_inits()$z)
+```
+
+# Run latent-states Dipper example
+
+```{r}
+samples <- nimbleMCMC(dipper_code_basic, dipper_constants, dipper_data,
+                      dipper_inits(), samplesAsCodaMCMC = TRUE)
+summary(samples)
+```
+
+# Wanted: marginal probability of entire capture-history
+
+* For CJS model, we can calculate the marginal probability of a capture history easily.
+* CJS defines a distribution of capture-histories.
+* Say we want to use a CJS distribution directly in a model 
+* This is provided in `nimbleEcology` and used here to introduce extending models.
+* We want model code like this:
+
+```{r}
+dipper_code_dCJS <- nimbleCode({
+  phi ~ dunif(0, 1) # survival prior
+  p ~ dunif(0, 1)   # detection prior
+  for (i in 1:N){
+    y[i, first[i]:T] ~ dCJS(phi, p)
+  }
+})
+```
+
+# Steps we will take
+
+* Write dCJS (`dCJS_R`) as an R function: get our math and logic right.
+* Test/debug `dCJS_R`.
+* Convert `dCJS_R` to a `nimbleFunction` (`dCJS`).
+* Test/debug uncompiled `dCJS` (in R).
+* Test/debug uncompiled `dCJS` in an uncompiled nimble model (in R).
+* Test/debug uncompiled `dCJS` in an uncompiled nimble MCMC (in R).
+* Compile and test `dCJS` outside of a model.
+* Compile and test `dCJS` in a compiled model.
+* Compile and test `dCJS` in a compiled MCMC.
+
+# How we could write `dCJS` in R
+
+This is a standard calculation.  I'll use an HMM approach.
+
+```{r}
+dCJS_R <- function (x, probSurvive, probCapture, log = FALSE) {
+  probAliveGivenHistory <- 1
+  logProbData <- 0
+  for (t in 2:length(x)) {
+    probAlive <- probAliveGivenHistory * probSurvive
+    if (x[t] == 1) {
+      probThisObs <- probAlive * probCapture
+      probAliveGivenHistory <- 1
+    } else {
+      probAliveNotSeen <- probAlive * (1 - probCapture)
+      probThisObs <- probAliveNotSeen + (1 - probAlive)
+      probAliveGivenHistory <- probAliveNotSeen/probThisObs
+    }
+    logProbData <- logProbData + log(probThisObs)
+  }
+  if (log) return(logProbData)
+  return(exp(logProbData))
+}
+```
+
+# Test `dCJS_R` in R
+
+```{r}
+y[5,] # A good example capture history
+dCJS_R(y[5,], probSurvive = 0.7, probCapture = 0.5, log = TRUE)
+```
+
+# Convert `dCJS_R` to `nimbleFunction`
+
+`nimbleFunction`:
+
+- Can be used in a model or algorithm
+- Can use models (e.g. an MCMC sampler) if it has "`setup`" code (not covered).
+- Can be compiled.
+- Supports much of R's math, distributions, and basic flow control.
+- Does not support objects or functions of any type complexity (lists, environments, lapply)
+- Requires type annotation for inputs and outputs
+
+```{r}
+dCJS <- nimbleFunction(
+  run = function(x = double(1),            # vector
+                 probSurvive = double(0),  # scalar
+                 probCapture = double(0),  # scalar
+                 log = integer(0, default = 0)) {  # integer scalar
+    returnType(double())  # scalar return, can be anywhere
+    probAliveGivenHistory <- 1
+    logProbData <- 0
+    for (t in 2:length(x)) {
+      probAlive <- probAliveGivenHistory * probSurvive
+      if (x[t] == 1) {
+        probThisObs <- probAlive * probCapture
+        probAliveGivenHistory <- 1
+      } else {
+        probAliveNotSeen <- probAlive * (1 - probCapture)
+        probThisObs <- probAliveNotSeen + (1 - probAlive)
+        probAliveGivenHistory <- probAliveNotSeen/probThisObs
+      }
+      logProbData <- logProbData + log(probThisObs)
+    }
+    if (log) return(logProbData)
+    return(exp(logProbData))
+  }
+)
+```
+
+# Test the uncompiled `dCJS` via R debugging tools
+
+```{r}
+dCJS(y[5,], probSurvive = 0.7, probCapture = 0.5, log = TRUE)
+```
+
+### We can debug it as needed in R.
+```{r, eval=FALSE}
+debugonce(dCJS)
+dCJS(y[5,], probSurvive = 0.7, probCapture = 0.5, log = TRUE)
+```
+
+# Test the uncompiled `dCJS` in an uncompiled model.
+
+### We can debug it in a model:
+```{r}
+dipper_code_dCJS <- nimbleCode({
+  phi ~ dunif(0, 1) # survival prior
+  p ~ dunif(0, 1)   # detection prior
+  for (i in 1:N){
+    y[i, first[i]:T] ~ dCJS(phi, p)
+  }
+})
+```
+
+```{r}
+dipper_model <- nimbleModel(code = dipper_code_dCJS,
+                            constants = dipper_constants,
+                            data = dipper_data,     # data can be set later.
+                            inits = dipper_inits()  # inits can be set later.
+                            )                       # dimensions is also a useful argument.
+```
+
+```{r}
+dipper_model$calculate()
+dipper_model$calculate("y[5,]")
+```
+
+```{r, eval=FALSE}
+debugonce(dCJS)
+dipper_model$calculate("y[5,]")
+```
+
+# Test the uncompiled `dCJS` in an uncompiled MCMC.
+
+```{r}
+dipper_MCMC <- buildMCMC(dipper_model)
+```
+
+```{r, eval=FALSE}
+debug(dCJS)
+dipper_MCMC$run(niter = 5)
+undebug(dCJS)
+```
+
+# Test compiled `dCJS` on its own
+
+```{r}
+C_dCJS <- compileNimble(dCJS)
+```
+
+```{r}
+C_dCJS(y[5,], 0.7, 0.5, log=TRUE)
+```
+
+# Test compiled `dCJS` in a compiled model and in MCMC
+
+* (Note potential issue knitting this step.)
+
+```{r, echo=FALSE}
+dipper_model <- nimbleModel(code = dipper_code_dCJS,
+                            constants = dipper_constants,
+                            data = dipper_data,     # data can be set later.
+                            inits = dipper_inits()  # inits can be set later.
+                            )                       # dimensions is also a useful argument.
+```
+
+```{r, echo=FALSE}
+dCJS <- nimbleFunction(
+  run = function(x = double(1),            # vector
+                 probSurvive = double(0),  # scalar
+                 probCapture = double(0),  # scalar
+                 log = integer(0, default = 0)) {  # integer scalar
+    returnType(double())  # scalar return, can be anywhere
+    probAliveGivenHistory <- 1
+    logProbData <- 0
+    for (t in 2:length(x)) {
+      probAlive <- probAliveGivenHistory * probSurvive
+      if (x[t] == 1) {
+        probThisObs <- probAlive * probCapture
+        probAliveGivenHistory <- 1
+      } else {
+        probAliveNotSeen <- probAlive * (1 - probCapture)
+        probThisObs <- probAliveNotSeen + (1 - probAlive)
+        probAliveGivenHistory <- probAliveNotSeen/probThisObs
+      }
+      logProbData <- logProbData + log(probThisObs)
+    }
+    if (log) return(logProbData)
+    return(exp(logProbData))
+  }
+)
+```
+
+```{r}
+C_dipper_model <- compileNimble(dipper_model)
+```
+
+```{r}
+C_dipper_model$calculate()
+C_dipper_model$phi <- 0.7
+C_dipper_model$p <- 0.5
+C_dipper_model$calculate() # Ensure any lifted nodes are calculated
+C_dipper_model$calculate('y[5,]')
+```
+
+```{r}
+dipper_MCMC <- buildMCMC(dipper_model)
+C_dipper_MCMC <- compileNimble(dipper_MCMC, project = dipper_model)
+samples <- runMCMC(C_dipper_MCMC)
+summary(samples)
+```
+
+# Recap so far
+
+- New functions and distribution can be provided as `nimbleFunction`s.
+- They can be developed and tested:
+
+    - first uncompiled (R) and then compiled (C++).
+    - first stand-alone, then in a model, then in an MCMC.
+    
+### Next topics
+
+- More about user-defined distributions: "r", "p" and "q" functions.
+- Example of a user-defined function (spatial covariance matrix as a function of distances).
+- More about variable types in `nimbleFunction`s.
+- More about `nimbleFunction` features.
+- The full-blown versions of `dCJS` in `nimbleEcology` will be shown later.
+
+# User-defined distribution: requirements
+
+User-defined distributions are simply `nimbleFunction`s that conform to some requirements.
+
+- Naming follows the R prefix convention of 'd' and (optionally) 'r', 'p' and 'q' functions.
+- The 'd' function must have *x* as its first argument, with appropriate type, such as `double(1)` for a vector random variable.
+- All variables in nimble models are doubles, so user-defined distribution and function arguments (and return values) should be non-scalar doubles or scalar double, integer or logical.  (Non-scalar integer or logical should not be used.)
+- The 'd' function must have *log* as its last argument, a logical (or integer) argument for whether the log density is returned or not. It must have `returnType(double(0))` (scalar).
+
+    - When called from a model, `log` will always be `1` (`TRUE`).
+
+- The (optional) 'r' function should have *n* as its first argument but need only work for `n=1`.  Otherwise it must have the same arguments as the `d` function (except for `x` and `log`).
+- The `returnType` of the 'r' function should be the same as the `x` type of the 'd' function. In other words, if the distribution is for a vector, then random draws should return a vector. 
+
+# User-defined distribution: When do you need 'r', 'p' and/or 'q' functions?
+
+- Random-number generation ('r' function) is only needed if:
+
+    - Initial values will not be provided, or 
+    - An algorithm that uses random draws such as sequential Monte Carlo ("particle filtering") from `nimbleSMC`
+ will be used.
+    - Posterior predictive nodes follow the distribution.
+
+- Cumulative distribution ('p') and quantile functions ('q') are only needed if:
+
+    - The distribution will be truncated, e.g. `y ~ T(dmy_dist(param1, param2), 0, Inf)`.
+
+# User-defined distribution: Manually registering user-defined distributions
+
+- `registerDistributions` is a function to register a new distribution for use in nimble models.
+- It is normally called automatically by `nimbleModel`, so you do not need to think about it.
+- You can call it manually if you need to:
+
+    - Support alternative parameterizations for your distribution.
+    - Provide a range of valid values (e.g. $x > 0$).
+    - Declare that values of $x$ must always be discrete (integers, even though the type declaration should be double!).
+    - Provide 'p' and 'q' functions.
+
+# User-defined functions: motivation
+
+Suppose we want to code a covariance matrix that depends on parameters for a Gaussian process model.
+
+In WinBUGS or JAGS, we would write the math to specify the matrix as part of the model code:
+
+```
+# Snippet of model code
+for(i in 1:n)
+  for(j in 1:n)
+    cov[i, j] <- sigma2*exp(-dists[i,j]/rho)
+
+prec[1:N, 1:N] <- inverse(cov[1:N, 1:N])
+x[1:N] ~ dmnorm(mu[1:N], prec[1:N, 1:N])
+```
+
+There are some disadvantages to this:
+
+- Only the math functionality allowed in BUGS code can be used (e.g., no `if` statements)
+- Model code can get complicated (lack of modularity)
+- $n^2$ `cov[i,j]` nodes in the model are created, likely leading to inefficiencies at various stages of processing.  In NIMBLE, the inefficiency from creating many nodes occurs when:
+
+    - creating the model
+    - configuring an MCMC
+    - compiling the model and any algorithms (e.g., MCMC)
+    - (to a lesser degree) running the algorithm (e.g., MCMC)
+
+(By the way, NIMBLE supports vectorized declarations, so we could write the following in model code:
+```
+cov[1:n, 1:n] <- sigma2 * exp(-dists[1:n, 1:n]/rho)
+```
+However, we will instead use this as an example for writing a user-defined function.)
+
+# User-defined functions: example
+
+In NIMBLE, users can write functions that can be directly used in model code.
+
+Here's the covariance matrix construction.
+
+```{r}
+expcov <- nimbleFunction(     
+  run = function(dists = double(2), rho = double(0), sigma = double(0)) {
+    returnType(double(2))
+    n <- dim(dists)[1]
+    result <- matrix(nrow = n, ncol = n, init = FALSE)
+    sigma2 <- sigma*sigma  # calculate once
+    for(i in 1:n)
+      for(j in 1:n)
+        result[i, j] <- sigma2*exp(-dists[i,j]/rho) # vectorized alternative is given later
+    return(result)
+  })
+```
+
+```{r, include=FALSE}
+# only needed for Rmd compilation; not needed for regular usage.
+assign('expcov', expcov, .GlobalEnv)
+```
+
+For-loops are slow in R but fast in C++.
+
+# Using the user-defined function in a model
+
+This function is then used in model code to determine the covariance matrix for the Gaussian spatial process at a finite set of locations (in this case the centroids of the spatial regions). 
+
+```{r}
+code <- nimbleCode({
+  mu[1:N] <- mu0 * ones[1:N]
+  cov[1:N, 1:N] <- expcov(dists[1:N, 1:N], rho, sigma)
+  x[1:N] ~ dmnorm(mu[1:N], cov = cov[1:N, 1:N])
+  # other parts of model omitted
+})
+```
+
+Note: we could also have inverted to use the precision, but that will generally be less efficient than working directly with the covariance. NIMBLE will take the Cholesky of the covariance and use that in the multivariate normal calculations.
+
+# Using the user-defined function: full example
+
+Here's a basic spatial model that uses the spatial covariance matrix constructed by the user-defined function. We'll see this in more detail in the spatial module.
+
+```{r}
+code <- nimbleCode({
+  # (hyper)parameter priors
+  mu0 ~ dnorm(0, sd = 100)
+  sigma ~ dunif(0, 100)  # prior for variance components based on Gelman (2006)
+  rho ~ dunif(0, 5)      # there might be a better non-informative prior for this
+
+  # MVN normal (Gaussian process) prior
+  mu[1:N] <- mu0 * ones[1:N]
+  cov[1:N, 1:N] <- expcov(dists[1:N, 1:N], rho, sigma)
+  x[1:N] ~ dmnorm(mu[1:N], cov = cov[1:N, 1:N])
+  
+  # likelihood for count data (e.g., disease mapping)
+  for(i in 1:N) {
+    expected[i] <- 1 # Data and/or predictive components would go here
+    lambda[i] <- expected[i] * exp(x[i])
+    y[i] ~ dpois(lambda[i])
+  }
+})
+
+N <- 134
+dists <- as.matrix(dist(runif(N)))
+model <- nimbleModel(code, constants = list(N = N, dists = dists, ones = rep(1, N)), 
+                     inits = list(rho = 1, sigma = 1, mu0 = 0))
+deps <- model$getDependencies(c('rho','mu0','sigma'), self = FALSE)
+deps
+model$simulate(deps)  # may be a bit slow uncompiled given the nested looping
+ # Note: there are no y values yet, so we are only looking at x
+range(model$x)
+model$calculate("x")
+Cmodel <- compileNimble(model)
+Cmodel$calculate("x")
+```
+
+# Vectorization within the nimbleFunction
+
+We could have written our user-defined function like this:
+
+```{r}
+expcov <- nimbleFunction(     
+  run = function(dists = double(2), rho = double(0), sigma = double(0)) {
+    returnType(double(2))
+    result <- sigma*sigma * exp(-dists / rho)
+    return(result)
+  })
+```
+
+Model code requires square brackets (`[]`) for all non-scalars.  `nimbleFunction` code does not.
+
+Since the code will be compiled to C++ code, where looping is fast, whether we vectorize or not may not make a big difference. 
+
+But there could be some difference (which will be faster is not clear), as the vectorized code will make use of Eigen (C++ library used in nimble-generated C++) and the non-vectorized will be standard C++. 
+
+# More about types in `nimbleFunction`s
+
+- "type" means dimensionality (scalar, vector, matrix, 3D array, etc.) and element type (double, integer, logical).
+- (You can also define `nimbleList` types, but these can't be used in models.)
+
+### Two challenges (sources of confusion) about types:
+
+#### Dynamic vs. static typing
+
+- R uses dynamic typing.  The type of `x` can be changed by re-assignment. Everything is just an "R object."
+- C++, and therefore `nimbleFunction` `run` code, uses static typing.  Types are determined by first assignment.
+
+```
+foo <- nimbleFunction(
+  run = function(x = double(1)) {
+    x_positive <- x > 0 # First usage: x_positive becomes logical vector
+    # ... other code
+    x_positive <- x^2   # Problem: x_positive cannot hold doubles
+  }
+)
+```
+
+#### Length-one vectors vs scalars; etc.
+
+- R lacks a true scalar type.  Scalars are simply vectors of length 1.
+- C++ has true scalars, and `nimbleFunction`s use them for efficiency.
+- R sometimes dynamically treats a one-row or one-column matrix as a vector.
+- `nimbleFuntion` code requires explicit dropping of dimensions.
+
+```
+foo <- nimbleFunction(
+  run = function(x = double(0), y = double(1), z = double(2)) {
+     x <- y             # wrong: scalar <- vector
+     x <- y[1]          # right
+     y <- z             # wrong: vector <- matrix
+     y <- z[,1]         # right
+     y <- z %*% y       # wrong: vector <- matrix
+     y <- (z %*% y)[,1] # right
+  }
+)
+```
+
+# More about `nimbleFunction` features
+
+### Important difference in argument-passing:
+
+- In compiled mode, non-scalar arguments are passed by reference.
+- In uncompiled mode, they are passed by copy (i.e., R semantics)
+
+### What can be compiled?
+
+- Most math, including vectorized math: `x <- A %*% b`
+    - Explicit indexing is not required as it is in model code.
+- Most distributions, including recycling-rule behavior (mix and match scalars/vectors)
+    - e.g., `dnorm(xVector, muScalar, sigmaVector)`
+- integer for loops: `for(i in 1:n)`
+- `if`-`then`-`else`
+- Some linear algebra: `eigen`, `svd`, `solve`, `forwardsolve`, `backsolve`, `inverse`
+- Modified versions of `numeric`, `integer`, `matrix`, `array` to create variables.
+- Modified version of `optim`.
+- Calls to arbitrary R functions via `nimbleRcall`.
+- Calls to arbitrary C/C++/fortran code via `nimbleExternalCall`.
+- Other details not listed here.
+
+
+
+# The full-blown versions of `dCJS`
+
+In a later module we will see:
+
+* different versions for time-varying vs time-constant survival and capture probabilities.
+* Inclusion of a `len` (length) parameter to support random-number generation.
+* Other distributions for other common model components.
+
