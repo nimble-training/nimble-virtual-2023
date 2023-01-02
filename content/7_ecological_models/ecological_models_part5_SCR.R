@@ -5,7 +5,7 @@ has_ggplot2 <- require(ggplot2)
 has_mcmcplots <- require(mcmcplots)
 has_coda <- require(coda)
 has_nimbleSCR <- require(nimbleSCR)
-generate_original_results <- FALSE
+generate_original_results <- TRUE
 DataDir <- file.path("..","..","..","..","wolverine_data","DataScript") # Modify as needed. See below to get data
 
 
@@ -321,16 +321,44 @@ data$habitat.mx[trunc(s[2]) + 1, trunc(s[1]) + 1] # How to do it from x = s[1], 
 ##   })
 
 
+## ---- eval=generate_original_results------------------------------------------
+Rmodel <- nimbleModel(code, constants, data, inits)
 
 
+## ---- eval=generate_original_results, message = FALSE-------------------------
+conf <- configureMCMC(Rmodel, monitors = c("N", "sigma", "p0"), print = FALSE)
+conf$removeSamplers("sxy")
+ACnodes <- paste0("sxy[", 1:constants$n.individuals, ", 1:2]")
+for(node in ACnodes) {
+  conf$addSampler(target = node,
+                  type = "RW_block",
+                  control = list(adaptScaleOnly = TRUE),
+                  silent = TRUE)
+}
+Rmcmc <- buildMCMC(conf)
 
 
+## ---- eval=generate_original_results------------------------------------------
+Cmodel <- compileNimble(Rmodel)
+Cmcmc <- compileNimble(Rmcmc, project = Rmodel)
+MCMC_runtime <- system.time(
+  samples <- runMCMC(Cmcmc, niter = 2000, samplesAsCodaMCMC = TRUE)
+)
 
 
+## ---- eval=generate_original_results, echo=FALSE------------------------------
+save(samples, file = file.path(DataDir, "samples.Rdata"))
 
 
+## ---- eval=!generate_original_results, echo=FALSE-----------------------------
+## load(file.path(DataDir, "samples.Rdata"))
 
 
 ## ---- echo=FALSE--------------------------------------------------------------
 have_samples <- exists("samples")
+
+
+## ---- eval=have_samples-------------------------------------------------------
+colnames(samples)
+plot(coda::as.mcmc(samples[1001:2000,]))
 

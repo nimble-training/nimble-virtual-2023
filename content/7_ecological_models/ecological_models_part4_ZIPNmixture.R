@@ -4,11 +4,13 @@ has_nimbleEcology <- require(nimbleEcology)
 if(!has_nimbleEcology)
   message("This module will use nimbleEcology, which you don't have installed.")
 library(nimble)
-nimbleOptions(MCMCjointlySamplePredictiveBranches = FALSE) # Work-around for development issue
+library(compareMCMCs)
 DO_POSTERIOR_PREDICTION <- FALSE
-runCases <- FALSE
+runCases <- TRUE
 DO_PLOT <- TRUE
-save_dir <- file.path("..","..","..","..","SwissGreatTits_saved_results")
+save_dir <- file.path("..","..","..","..","Jan2023_SwissGreatTits_saved_results")
+# if needed:
+# dir.create(save_dir)
 
 
 ## -----------------------------------------------------------------------------
@@ -83,6 +85,11 @@ SGT_data1 <- list(y = y,
                   nsite = 263,
                   nrep = 3)
 
+save(SGT_data1, Nst, SGT_inits, file = file.path("..", "examples", "SwissGreatTits", "prepared_data.RData"))
+
+
+## -----------------------------------------------------------------------------
+load(file = file.path("..", "examples", "SwissGreatTits", "prepared_data.RData"))
 
 
 ## -----------------------------------------------------------------------------
@@ -120,7 +127,7 @@ Section6p11_code <- nimbleCode( {
     a[i] ~ dbern(phi)
     eps.lam[i] ~ dnorm(0, tau.lam)       # Random site effects in log(abundance)
     loglam[i] <- beta0 + inprod(beta[1:7], lamDM[i, 1:7]) + eps.lam[i] * hlam.on
-    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # �Stabilize� log
+    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # Stabilize log
     lam[i] <- exp(loglam.lim[i])
     mu.poisson[i] <- a[i] * lam[i]
     N[i] ~ dpois(mu.poisson[i])
@@ -132,7 +139,7 @@ Section6p11_code <- nimbleCode( {
     for (j in 1:nrep){
       y[i,j] ~ dbin(p[i,j], N[i])
       p[i,j] <- 1 / (1 + exp(-lp.lim[i,j]))
-      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # �Stabilize� logit
+      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # Stabilize logit
       lp[i,j] <- alpha0[j] + alpha[1] * elev[i] + alpha[2] * elev2[i] +
         alpha[3] * date[i,j] + alpha[4] * date2[i,j] +
         alpha[5] * dur[i,j] + alpha[6] * dur2[i,j] +
@@ -204,66 +211,144 @@ SGT_inits_full<- function(){
 
 
 ## -----------------------------------------------------------------------------
-m2 <- nimbleModel(Section6p11_code,
+m1 <- nimbleModel(Section6p11_code,
                  constants = SGT_data1,
                  inits = SGT_inits_full())
-m2$initializeInfo()
+m1$initializeInfo()
 ## The only nodes left not initialized are parts of y
-m2$y
+m1$y
 ## The missing data are ok: they are really missing y values from rep 3.
 ## Note, in this case we don't need these sampled, but they will be.
 
 
-## ----comp-cost-2, eval = runCases---------------------------------------------
-## MCMC2 <- buildMCMC(m2)
-## compiled2 <- compileNimble(m2, MCMC2)
-## ## See that it runs for small number of iterations
-## compiled2$MCMC2$run(20)
-## ## We saw reports of an initialization problem above,
-## ## so let's do some manual calculation to check
-## compiled2$m2$calculate()
-## ## We see the compiled model is now fully
-## ## initialized and has a valid total logProb.
-## m2$calculate()
-## ## We see the uncompiled model (with original inits)
-## ## does not give a valid logProb.
-## m2$logProb_y
-## ## We see the problem is missing parts of y
-## m2$calculate("y")
-## ## Indeed, calculating logProbs just of y gives NA
-## compiled2$m2$calculate("y")
-## ## But again the compiled model is ok after
-## ## MCMC initialization.
-## 
-## ## Conclusion: What we see is that elements of y that are missing
-## ## data make the model start with invalid log probability.
-## ## That may not be a problem.  Those nodes will be
-## ## initialized from their priors, so if those give decent
-## ## values, there will be no problem.
-## ## more later.  For now, we will move on.
-## 
-## ## We do not want timing results to involve NAs or NaNs,
-## ## since those typically engage special-case processing.
-## ## So let's start timing again and time 200 iterations.
-## t2_200 <- system.time(compiled2$MCMC2$run(200))
+## ----comp-cost-1, eval = TRUE-------------------------------------------------
+MCMC1 <- buildMCMC(m1)
+compiled1 <- compileNimble(m1, MCMC1)
+## See that it runs for small number of iterations  
+compiled1$MCMC1$run(10)
+## We saw reports of an initialization problem above,
+## so let's do some manual calculation to check
+compiled1$m1$calculate()
+## We see the compiled model is now fully
+## initialized and has a valid total logProb.
+m1$calculate()
+## We see the uncompiled model (with original inits)
+## does not give a valid logProb.
+m1$logProb_y
+## We see the problem is missing parts of y
+m1$calculate("y")
+## Indeed, calculating logProbs just of y gives NA
+compiled1$m1$calculate("y")
+## But again the compiled model is ok after
+## MCMC initialization.
+
+## Conclusion: What we see is that elements of y that are missing
+## data make the model start with invalid log probability.
+## That may not be a problem.  Those nodes will be
+## initialized from their priors, so if those give decent
+## values, there will be no problem.
+## more later.  For now, we will move on.
+
+## Note that when code encounters NAs or NaNs,
+## it may run slower.
 
 
 ## ---- eval=runCases, echo=TRUE------------------------------------------------
-## t2_50K <- system.time(samples2 <- runMCMC(compiled2$MCMC2, niter = 50000, nburnin = 5000))
-## save(t2_200, t2_50K, samples2, file = file.path(save_dir, "ZIPNmix_case2.Rdata"))
+comparison1 <- compareMCMCs(modelInfo = list(model = m1),
+                            MCMCcontrol = list(niter = 120000, nburnin = 20000, thin = 100))
+save(comparison1, file = file.path(save_dir, "ZIPNmix_case1.Rdata"))
 
 
 ## ---- eval=!runCases, echo=FALSE----------------------------------------------
-load(file.path(save_dir, "ZIPNmix_case2.Rdata"))
+## load(file.path(save_dir, "ZIPNmix_case1.Rdata"))
 
 
 ## -----------------------------------------------------------------------------
-# How long did 50000 iterations take?
-t2_50K[1]
-# Mixing
-coda::effectiveSize(samples2)
-# Efficiency
-coda::effectiveSize(samples2) / t2_50K[1]
+# How long did 120000 iterations take?
+comparison1$nimble$times$sampling
+# Mixing and efficiency
+comparison1$nimble$metrics
+
+
+## ---- echo=FALSE--------------------------------------------------------------
+Section6p11_code_jags <- nimbleCode( {
+  
+  # Specify priors
+  # zero-inflation/suitability
+  phi ~ dunif(0,1)          # proportion of suitable sites (probability of being not a structural 0)
+  theta <- 1-phi            # zero-inflation (proportion of unsuitable)
+  ltheta <- logit(theta)
+  
+  # abundance
+  beta0 ~ dnorm(0, 0.1)     # log(lambda) intercept
+  for(k in 1:7){            # Regression params in lambda
+    beta[k] ~ dnorm(0, 1)
+  }
+  tau.lam <- pow(sd.lam, -2)
+  sd.lam ~ dunif(0, 2)      # site heterogeneity in lambda
+  
+  # detection
+  for(j in 1:3){
+    alpha0[j] <- logit(mean.p[j])
+    mean.p[j] ~ dunif(0, 1) # p intercept for occasions 1-3
+  }
+  for(k in 1:13){           # Regression params in p
+    alpha[k] ~ dnorm(0, 1)
+  }
+  tau.p.site <- pow(sd.p.site, -2)
+  sd.p.site ~ dunif(0, 2)   # site heterogeneity in p
+  tau.p.survey <- pow(sd.p.survey, -2)
+  sd.p.survey ~ dunif(0, 2) # site-survey heterogeneity in p
+  
+  # ZIP model for abundance
+  for (i in 1:nsite){
+    a[i] ~ dbern(phi)
+    eps.lam[i] ~ dnorm(0, tau.lam)       # Random site effects in log(abundance)
+    loglam[i] <- beta0 + inprod(beta[1:7], lamDM[i, 1:7]) + eps.lam[i] * hlam.on
+    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # Stabilize log
+    lam[i] <- exp(loglam.lim[i])
+    mu.poisson[i] <- a[i] * lam[i]
+    N[i] ~ dpois(mu.poisson[i])
+  }
+  
+  # Measurement error model
+  for (i in 1:nsite){
+    eps.p.site[i] ~ dnorm(0, tau.p.site) # Random site effects in logit(p)
+    for (j in 1:nrep){
+      y[i,j] ~ dbin(p[i,j], N[i])
+      p[i,j] <- 1 / (1 + exp(-lp.lim[i,j]))
+      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # Stabilize logit
+      lp[i,j] <- alpha0[j] + alpha[1] * elev[i] + alpha[2] * elev2[i] +
+        alpha[3] * date[i,j] + alpha[4] * date2[i,j] +
+        alpha[5] * dur[i,j] + alpha[6] * dur2[i,j] +
+        alpha[7] * elev[i] * date[i,j] + alpha[8] * elev2[i] * date[i,j] +
+        alpha[9] * elev[i] * dur[i,j] + alpha[10] * elev[i] * dur2[i,j] +
+        alpha[11] * elev2[i] * dur[i,j] + alpha[12] * date[i,j] * dur[i,j] +
+        alpha[13] * date[i,j] * dur2[i,j] +
+        eps.p.site[i] * hp.site.on + eps.p.survey[i,j] * hp.survey.on
+      eps.p.survey[i,j] ~ dnorm(0, tau.p.survey) # Random site-survey effects
+    }
+  }
+})
+
+
+## ---- eval=runCases, echo=TRUE------------------------------------------------
+comparison1jags <- compareMCMCs(modelInfo =
+                                  list(code = Section6p11_code_jags, constants = SGT_data1, inits = SGT_inits_full()),
+                                MCMCcontrol = list(niter = 120000, nburnin = 20000, thin = 100),
+                                MCMCs = "jags")
+save(comparison1jags, file = file.path(save_dir, "ZIPNmix_case1jags.Rdata"))
+
+
+## ---- eval=!runCases, echo=FALSE----------------------------------------------
+## load(file.path(save_dir, "ZIPNmix_case1jags.Rdata"))
+
+
+## -----------------------------------------------------------------------------
+# How long did 120000 iterations take?
+comparison1jags$jags$times$sampling
+# Mixing and efficiency
+comparison1jags$jags$metrics
 
 
 ## -----------------------------------------------------------------------------
@@ -302,7 +387,7 @@ Section6p11_code_grouped <- nimbleCode( {
     a[i] ~ dbern(phi)
     eps.lam[i] ~ dnorm(0, tau.lam)       # Random site effects in log(abundance)
     loglam[i] <- loglam.fixed[i] + eps.lam[i] * hlam.on
-    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # �Stabilize� log
+    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # Stabilize log
     lam[i] <- exp(loglam.lim[i])
     mu.poisson[i] <- a[i] * lam[i]
     N[i] ~ dpois(mu.poisson[i])
@@ -324,7 +409,7 @@ Section6p11_code_grouped <- nimbleCode( {
     for (j in 1:nrep){
       y[i,j] ~ dbin(p[i,j], N[i])
       p[i,j] <- 1 / (1 + exp(-lp.lim[i,j]))
-      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # �Stabilize� logit
+      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # Stabilize logit
 
       ## new
       lp[i,j] <- lp.fixed[i, j] +
@@ -337,43 +422,31 @@ Section6p11_code_grouped <- nimbleCode( {
 )
 
 
-
-## ----comp-cost-3, eval=runCases-----------------------------------------------
-## m3 <- nimbleModel(Section6p11_code_grouped,
-##                  constants = SGT_data1,
-##                  inits = SGT_inits_full())
-## 
-## MCMCconf3 <- configureMCMC(m3)
-## MCMC3 <- buildMCMC(MCMCconf3)
-## compiled3 <- compileNimble(m3, MCMC3)
-## # Some quick initial iterations
-## compiled3$MCMC$run(20)
-## t3_200 <- system.time(compiled3$MCMC3$run(200))
-
-
-## ---- eval=runCases, echo=TRUE------------------------------------------------
-## t3_50K <- system.time(samples3 <- runMCMC(compiled3$MCMC3, niter = 50000, nburnin = 5000))
-## save(t3_200, t3_50K, samples3, file = file.path(save_dir, "ZIPNmix_case3.Rdata"))
+## ----comp-cost-2, eval=runCases-----------------------------------------------
+m2 <- nimbleModel(Section6p11_code_grouped,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+comparison2 <- compareMCMCs(modelInfo = list(model = m2),
+                            MCMCcontrol = list(niter = 120000, nburnin = 20000, thin = 100))
+save(comparison2, file = file.path(save_dir, "ZIPNmix_case2.Rdata"))
 
 
 ## ---- eval=!runCases, echo=FALSE----------------------------------------------
-load(file.path(save_dir, "ZIPNmix_case3.Rdata"))
+## load(file.path(save_dir, "ZIPNmix_case2.Rdata"))
 
 
 ## -----------------------------------------------------------------------------
-# How long did 50000 iterations take?
-t3_50K[1]
-# Mixing
-coda::effectiveSize(samples3)
-# Efficiency
-coda::effectiveSize(samples3) / t3_50K[1]
+# How long did 120000 iterations take?
+comparison2$nimble$times$sampling
+# Mixing and efficiency
+comparison2$nimble$metrics
 
 
 ## ---- eval=FALSE--------------------------------------------------------------
-## y[i, 1:num_visits] ~ dNmixture_v(lambda[i],
-##                                  prob[1:num_visits],
+## y[i, 1:num_surveys] ~ dNmixture_v(lambda[i],
+##                                  prob[1:num_surveys],
 ##                                  Nmin = -1, Nmax = -1,
-##                                  len = num_visits)
+##                                  len = num_surveys)
 
 
 ## -----------------------------------------------------------------------------
@@ -414,7 +487,7 @@ Section6p11_code_dNmixture <- nimbleCode( {
     ## new
     loglam[i] <- loglam.fixed[i] + eps.lam[i] * hlam.on
     
-    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # �Stabilize� log
+    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # Stabilize log
     lam[i] <- exp(loglam.lim[i])
     mu.poisson[i] <- a[i] * lam[i]
     # N[i] ~ dpois(mu.poisson[i])
@@ -438,7 +511,7 @@ Section6p11_code_dNmixture <- nimbleCode( {
     p[i, 1:nrep_by_site[i]] <- 1 / (1 + exp(-lp.lim[i,1:nrep_by_site[i]]))
     for (j in 1:nrep_by_site[i]){
       #        y[i,j] ~ dbin(p[i,j], N[i])
-      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # �Stabilize� logit
+      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # Stabilize logit
       ## new
       lp[i,j] <- lp.fixed[i, j] +
         eps.p.site[i] * hp.site.on + eps.p.survey[i,j] * hp.survey.on
@@ -450,35 +523,25 @@ Section6p11_code_dNmixture <- nimbleCode( {
 
 
 ## ----comp-cost-4, eval=runCases-----------------------------------------------
-## nrep_by_site <- apply(y, 1, function(x) sum(!is.na(x)))
-## SGT_data1$nrep_by_site <- nrep_by_site
-## m4 <- nimbleModel(Section6p11_code_dNmixture,
-##                  constants = SGT_data1,
-##                  inits = SGT_inits_full())
-## 
-## MCMCconf4 <- configureMCMC(m4)
-## MCMC4 <- buildMCMC(MCMCconf4)
-## compiled4 <- compileNimble(m4, MCMC4)
-## compiled4$MCMC$run(20)
-## t4_200 <- system.time(compiled4$MCMC4$run(200))
-
-
-## ---- eval=runCases, echo=TRUE------------------------------------------------
-## t4_50K <- system.time(samples4 <- runMCMC(compiled4$MCMC4, niter = 50000, nburnin = 5000))
-## save(t4_200, t4_50K, samples4, file = file.path(save_dir, "ZIPNmix_case4.Rdata"))
+nrep_by_site <- apply(y, 1, function(x) sum(!is.na(x)))
+SGT_data1$nrep_by_site <- nrep_by_site
+m3 <- nimbleModel(Section6p11_code_dNmixture,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
+comparison3 <- compareMCMCs(modelInfo = list(model = m3),
+                            MCMCcontrol = list(niter = 120000, nburnin = 20000, thin = 100))
+save(comparison3, file = file.path(save_dir, "ZIPNmix_case3.Rdata"))
 
 
 ## ---- eval=!runCases, echo=FALSE----------------------------------------------
-load(file.path(save_dir, "ZIPNmix_case4.Rdata"))
+## load(file.path(save_dir, "ZIPNmix_case3.Rdata"))
 
 
 ## -----------------------------------------------------------------------------
-# How long did 50000 iterations take?
-t4_50K[1]
-# Mixing
-coda::effectiveSize(samples4)
-# Efficiency
-coda::effectiveSize(samples4) / t4_50K[1]
+# How long did 120000 iterations take?
+comparison3$nimble$times$sampling
+# Mixing and efficiency
+comparison3$nimble$metrics
 
 
 ## -----------------------------------------------------------------------------
@@ -522,7 +585,7 @@ Section6p11_code_grouped_dlogis <- nimbleCode( {
     ## new
     loglam[i] <- loglam.fixed[i] + eps.lam[i] * hlam.on
     
-    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # �Stabilize� log
+    loglam.lim[i] <- min(250, max(-250, loglam[i]))  # Stabilize log
     lam[i] <- exp(loglam.lim[i])
     mu.poisson[i] <- a[i] * lam[i]
     N[i] ~ dpois(mu.poisson[i])
@@ -545,7 +608,7 @@ Section6p11_code_grouped_dlogis <- nimbleCode( {
     for (j in 1:nrep){
       y[i,j] ~ dbin(p[i,j], N[i])
       p[i,j] <- 1 / (1 + exp(-lp.lim[i,j]))
-      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # �Stabilize� logit
+      lp.lim[i,j] <- min(250, max(-250, lp[i,j]))  # Stabilize logit
       ## new
       lp[i,j] <- lp.fixed[i, j] +
         eps.p.site[i] * hp.site.on + eps.p.survey[i,j] * hp.survey.on
@@ -559,44 +622,51 @@ Section6p11_code_grouped_dlogis <- nimbleCode( {
 
 
 ## ---- eval=runCases-----------------------------------------------------------
-## assignRWB <- function(MCMCconf) {
-##   MCMCconf$removeSamplers(c("beta0","beta"))
-##   # Set up block for one set of coefficients, with repetition
-##   for(i in 1:4)
-##     MCMCconf$addSampler(c("beta0","beta"), type = "RW_block")
-##   MCMCconf$removeSamplers(c("alpha0", "alpha"))
-##   # Set up block for the other set of coefficients, with repetition
-##   for(i in 1:7)
-##     MCMCconf$addSampler(c("alpha0", "alpha"), type = "RW_block")
-##   MCMCconf
-## }
-## 
-## m5 <- nimbleModel(Section6p11_code_grouped_dlogis,
-##                  constants = SGT_data1,
-##                  inits = SGT_inits_full())
-## 
-## MCMCconf5 <- configureMCMC(m5)
-## MCMCconf5 <- assignRWB(MCMCconf5)
-## MCMC5 <- buildMCMC(MCMCconf5)
-## compiled5 <- compileNimble(m5, MCMC5)
-## compiled5$MCMC$run(20)
-## t5_200 <- system.time(compiled5$MCMC5$run(200))
+assignRWB <- function(model) {
+  MCMCconf <- configureMCMC(model)
+  MCMCconf$removeSamplers(c("beta0","beta"))
+  # Set up block for one set of coefficients, with repetition
+  MCMCconf$addSampler(c("beta0","beta"), type = "RW_block", tries = 5, adaptInterval=20)
+  MCMCconf$removeSamplers(c("alpha0", "alpha"))
+  # Set up block for the other set of coefficients, with repetition
+  MCMCconf$addSampler(c("alpha0", "alpha"), type = "RW_block", tries = 5, adaptInterval=20)
+  MCMCconf
+}
 
+m4 <- nimbleModel(Section6p11_code_grouped_dlogis,
+                 constants = SGT_data1,
+                 inits = SGT_inits_full())
 
-## ---- eval=runCases, echo=TRUE------------------------------------------------
-## t5_50K <- system.time(samples5 <- runMCMC(compiled5$MCMC5, niter = 50000, nburnin = 5000))
-## save(t5_200, t5_50K, samples5, file = file.path(save_dir, "ZIPNmix_case5.Rdata"))
+comparison4 <- compareMCMCs(modelInfo = list(model = m4),
+                            MCMCcontrol = list(niter = 120000, nburnin = 20000, thin = 100),
+                            nimbleMCMCdefs = list(RWB = assignRWB),
+                            MCMCs = "RWB",
+                            conversions =
+                              list(RWB = list(
+                                "mean.p[1]" = "expit(`alpha0[1]`)",
+                                "alpha0[1]" = NULL,
+                                "mean.p[2]" = "expit(`alpha0[2]`)",
+                                "alpha0[2]" = NULL,
+                                "mean.p[3]" = "expit(`alpha0[3]`)",
+                                "alpha0[3]" = NULL)))
+save(comparison4, file = file.path(save_dir, "ZIPNmix_case4.Rdata"))
 
 
 ## ---- eval=!runCases, echo=FALSE----------------------------------------------
-load(file.path(save_dir, "ZIPNmix_case5.Rdata"))
+## load(file.path(save_dir, "ZIPNmix_case4.Rdata"))
 
 
 ## -----------------------------------------------------------------------------
-# How long did 50000 iterations take?
-t5_50K[1]
-# Mixing
-coda::effectiveSize(samples5)
-# Efficiency
-coda::effectiveSize(samples5) / t5_50K[1]
+# How long did 120000 iterations take?
+comparison4$RWB$times$sampling
+# Mixing and efficiency
+comparison4$RWB$metrics
+
+
+## -----------------------------------------------------------------------------
+c1 <- renameMCMC(comparison1, "original", "nimble")
+c2 <- renameMCMC(comparison2, "grouped", "nimble")
+c3 <- renameMCMC(comparison3, "Nmix", "nimble")
+make_MCMC_comparison_pages(c(comparison1jags, c1, c2, c3, comparison4),
+                           dir = "Swiss_Great_Tit_MCMC_comparisons")
 

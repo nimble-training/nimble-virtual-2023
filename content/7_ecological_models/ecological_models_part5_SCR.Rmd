@@ -22,7 +22,7 @@ has_ggplot2 <- require(ggplot2)
 has_mcmcplots <- require(mcmcplots)
 has_coda <- require(coda)
 has_nimbleSCR <- require(nimbleSCR)
-generate_original_results <- FALSE
+generate_original_results <- TRUE
 DataDir <- file.path("..","..","..","..","wolverine_data","DataScript") # Modify as needed. See below to get data
 ```
 
@@ -44,14 +44,16 @@ Two purposes of this worked example
 
 * Example of re-writing how a model is handled in nimble to improve efficiency.
 * Direct interest in `nimbleSCR` package.
-* [Turek et al. (2023)](https://doi.org/10.1002/ecs2.3385) report 100-fold efficiency gains using with the methods in this example.
+* [Turek et al. (2021)](https://doi.org/10.1002/ecs2.3385) report 100-fold efficiency gains using with the methods in this example.
+
+This example uses package `nimbleSCR`.
 
 Acknowledgements
 =====
 
 * Thanks to Richard Bischof (Norwegian University of Life Sciences) for leading these efforts.  
 * [Wolverine data](https://doi.org/10.5061/dryad.42m96c8) are publicly available on Dryad thanks to [Milleret et al. (2018)](https://doi.org/10.1002/ece3.4751).
-* [Worked example used here](https://nimble-dev.github.io/nimbleSCR/wolverine_example.html) is available in association with [Turek et al. (2023)](https://doi.org/10.1002/ecs2.3385).
+* [Worked example used here](https://nimble-dev.github.io/nimbleSCR/wolverine_example.html) is available in association with [Turek et al. (2021)](https://doi.org/10.1002/ecs2.3385).
 * Updates to nimbleSCR are in development.
 * Thanks to current and future collaborators and nimbleSCR developers: Richard Bischof, Daniel Turek, Cyril Milleret, Torbj&#0248;rn Ergon, Pierre Dupont, Wei Zhang
 
