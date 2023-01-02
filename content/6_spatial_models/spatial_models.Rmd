@@ -448,24 +448,18 @@ cModel <- compileNimble(model)
 
 # Running an MCMC
 
-In order to improve mixing, we'll customize a tuning parameter for the block random walk (Metropolis)
-sampler on the latent spatial values.
-
 ```{r}
 conf <- configureMCMC(model, enableWAIC = TRUE)
 conf$addMonitors('x')
-conf$removeSamplers('x[1:134]')
-## Changing a tunable parameter in the adaptation of RW_block makes a big difference.
-conf$addSampler('x[1:134]', 'RW_block', control = list(adaptFactorExponent = 0.25))
 
 MCMC <- buildMCMC(conf)
-cMCMC <- compileNimble(MCMC, project = cModel)
-system.time(output <- runMCMC(cMCMC, niter = 10000, nburnin = 5000, thin = 5, WAIC = TRUE))
+cMCMC <- compileNimble(MCMC, project = cModel) 
+system.time(output <- runMCMC(cMCMC, niter = 30000, nburnin = 5000, thin = 25, WAIC = TRUE))
 samples <- output$samples
 waic_gp <- output$WAIC
 ```
 
-Note that mixing in this model is somewhat slow, because of the need to explore the correlated spatial process, `x`, which is generally less effective in non-conjugate settings, such as this one, where the observations are Poisson and the prior for the latent process is normal.
+Note that mixing in this model is somewhat slow, because of the need to explore the correlated spatial process, `x`, which is generally more difficult in non-conjugate settings, such as this one, where the observations are Poisson and the prior for the latent process is normal.
 
 # Trying HMC
 
@@ -524,7 +518,7 @@ system.time(samplesHMC <- runMCMC(cHMC, niter = 1500, nburnin = 750))
 ```
 
 That takes a while, which may in part be because of some room for improvement in NIMBLE's AD efficiency with linear algebra calculations.
-
+Stan is a bit more than twice as fast in this case.
 
 # Results
 
@@ -547,8 +541,6 @@ ts.plot(samplesHMC[ , 'x[5]'], main = 'x[5]')
 ts.plot(samplesHMC[ , 'x[50]'], main = 'x[50]')
 ts.plot(samplesHMC[ , 'x[100]'], main = 'x[100]')
 ```
-
-The posteriors from HMC seem to be somewhat different from the Metropolis-based sampling. We'll need to look into this to better understand what is happening.  
 
 We can look at the map of the estimated relative risks. Note the scale is very different than of the standardized mortality ratio raw values.
 

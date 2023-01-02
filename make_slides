@@ -1,7 +1,7 @@
 #! /usr/bin/Rscript
 # usage:
 # ./make_slides overview
-# cd modules; ../make_slides nimble_bugs
+# cd content/1_introduciton_to_nimble; ../../make_slides introduction_to_nimble.Rmd
 # etc.
 
 library(rmarkdown)

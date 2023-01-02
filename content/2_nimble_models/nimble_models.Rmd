@@ -352,7 +352,7 @@ Results from `model$getDependencies` are in *topologically sorted* order:
 - If you calculate them in order, you'll get correct results.
 - E.g., `predicted.y[2]` comes before `y[2]`.
 
-## Why provide indexes as constants?
+# Why provide indexes as constants?
 
 Recall the likelihood component of the deer E. cervi model:
 
@@ -377,13 +377,13 @@ DEdata <- list(Ecervi_01 = DeerEcervi$Ecervi_01)
 
 m_light <- nimbleModel(DEcode, constants = DEconstants)
 
-DEconstants <- list(num_farms = 24,
+DEconstants2 <- list(num_farms = 24,
                     num_animals = 826,
                     cLength = DeerEcervi$cLength)
-DEdata <- list(Ecervi_01 = DeerEcervi$Ecervi_01,
+DEdata2 <- list(Ecervi_01 = DeerEcervi$Ecervi_01,
                     sex = DeerEcervi$Sex,
                     farm_ids = DeerEcervi$farm_ids)
-m_heavy <-  nimbleModel(DEcode, data = DEdata, constants = DEconstants)
+m_heavy <-  nimbleModel(DEcode, data = DEdata2, constants = DEconstants2)
 ```
 
 Now let's look at the dependency (graph) structure.
@@ -566,6 +566,36 @@ In this case, the model doesn't have much hierarchical structure.
 You may not know where there are lifted nodes.
 
 Always determine what to `calculate` or `simulate` from `getDependencies` or other such tools.
+
+# Initial values 
+
+A common cause of user problems is bad or incomplete initial values for an MCMC.
+
+NIMBLE will simulate initial values from the prior distribution but this can cause problems in various situations:
+
+ - with vague priors, one can get very bad initial values
+    - in particular, can get probabilities of 0 or 1, which may not be valid in a given model
+ - with constraints, simulated values may not satisfy a constraint
+ - with truncation, there may be numerical problems if far out in the tail of a distribution
+
+```{r, bad-inits}
+DEmodel <- nimbleModel(DEcode, data = DEdata, constants = DEconstants)
+DEmodel$calculate()
+DEmodel$getVarNames()
+DEmodel$calculate('Ecervi_01')
+DEmodel$sex_int
+
+DEmodel$simulate(DEmodel$getNodeNames())  # by default won't simulate into data nodes
+DEmodel$sex_int   # extreme!
+DEmodel$calculate()
+DEmodel$calculate('sex_int')
+DEmodel$calculate('length_coef')
+DEmodel$calculate('farm_effect')
+
+DEmodel$calculate('Ecervi_01')
+head(DEmodel$disease_probability, n = 50)
+```
+
 
 # Exercises
 
