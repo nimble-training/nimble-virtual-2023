@@ -19,7 +19,6 @@ knitr::opts_chunk$set(echo = TRUE)
 has_nimbleEcology <- require(nimbleEcology)
 if(!has_nimbleEcology)
   message("This module will use nimbleEcology, which you don't have installed.")
-doDHMMexample <- FALSE
 ```
 
 Agenda
@@ -34,13 +33,20 @@ In this module we will cover a variety of distributions and strategies relevant 
 5. N-mixture models
 6. Spatial capture-recapture (SCR) models
 
+Some resources
+=====
+
 Distributions that marginalize over latent states are available for the first five of these in the [`nimbleEcology` (Goldstein et al. 2020)](https://CRAN.R-project.org/package=nimbleEcology) package.
+
+We will focus on the code.  For `nimbleEcology`, the math related to the code is summarized in the [package vignette](https://cran.r-project.org/web/packages/nimbleEcology/vignettes/Introduction_to_nimbleEcology.html).
 
 Examples of occupancy, dynamic occupancy, and N-mixture models are given in [*One size does not fit all: Customizing MCMC methods for hierarchical models using NIMBLE* (Ponisio et al. 2020)](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.6053).
 
 Examples of CJS and HMM are given in [*Efficient Markov chain Monte Carlo sampling for hierarchical hidden Markov models* (Turek et al. 2016)](https://link.springer.com/article/10.1007/s10651-016-0353-z).
 
 Examples of SCR are given in [*Efficient Estimation of Large-Scale Spatial Capture-Recapture Models* (Turek et al. 2020, bioRxiv preprint)](https://www.biorxiv.org/content/10.1101/2020.05.07.081182v1).  Code for these is (mostly) in the Appendix but is not yet curated into a package.
+
+ [Turek et al. (2021)](https://doi.org/10.1002/ecs2.3385)
 
 Some SCR steps are given in [*A local evaluation of the individual state-space to scale up Bayesian spatial capture-recapture* (Milleret et al. 2019). Ecology and Evolution 9:352–363](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.4751)
 
@@ -303,3 +309,91 @@ This means we have implemented variants for `dCJS` (and others) depending on whe
 - `dCJS_vs` : survival is vector (time-dependent) but capture is scalar (time-constant).
 - `dCJS_vv` : both are time-dependent.
 
+Source code example: `dCJS_vv`
+=====
+```{r, eval=FALSE}
+dCJS_vv <- nimbleFunction(
+  # It is assumed that the individual has already been captured.
+  # Therefore, the first entry in x represents the first possible recapture event.
+  # probSurvive[t] represents survival from t-1 to t.
+  # probCapture[t] represents capture probability at time t.
+  run = function(x = double(1),    ## standard name for the "data"
+                 probSurvive = double(1),
+                 probCapture = double(1),
+                 len = double(0, default = 0),
+                 log = integer(0, default = 0) ## required log argument
+  ) {
+    if (len != 0) {
+      if (len != length(x)) stop("Argument len must match length of data, or be 0.")
+    }
+    if (length(probSurvive) < length(x) - 1)
+      stop("Length of probSurvive must be at least length of data minus 1.")
+    if (length(x) != length(probCapture)) stop("Length of probCapture does not match length of data.")
+    if (x[1] != 1) stop("dCJS requires specifying first capture. x[1] must equal 1.")
+
+    ## Note the calculations used here are actually in hidden Markov model form.
+    probAliveGivenHistory <- 1
+    ## logProbData will be the final answer
+    logProbData <- 0
+    if (len == 0) {  ## l<1 should not occur, but just in case:
+      len <- length(x)
+    }
+    for (t in 2:len) {
+      ## probAlive is P(Alive(t) | x(1)...x(t-1))
+      ## probAliveGivenHistory is (Alive(t-1) | x(1)...x(t-1))
+      probAlive <- probAliveGivenHistory * probSurvive[t - 1]
+      if (!is.na(x[t])) {
+        if (x[t] == 1) {
+          ## ProbThisObs = P(x(t) | x(1)...x(t-1))
+          probThisObs <- probAlive * probCapture[t]
+          probAliveGivenHistory <- 1
+        } else {
+          probAliveNotSeen <- probAlive * (1 - probCapture[t])
+          probThisObs <- probAliveNotSeen + (1 - probAlive)
+          probAliveGivenHistory <- probAliveNotSeen / probThisObs
+        }
+        logProbData <- logProbData + log(probThisObs)
+      }
+    }
+    if (log) {
+      return(logProbData)
+    }
+    return(exp(logProbData))
+    returnType(double())
+  }
+)
+```
+
+Source code example: `rCJS_vv`
+=====
+```{r, eval=FALSE}
+rCJS_vv <- nimbleFunction(
+  run = function(n = integer(),
+                 probSurvive = double(1),
+                 probCapture = double(1),
+                 len = double(0, default = 0)) {
+    if (n != 1) stop("rCJS only works for n = 1")
+    if (len < 2)
+      stop("len must be greater than 1.")
+    if(length(probSurvive) != len - 1)
+      stop("Length of probSurvive is not the same as len - 1.")
+    if(length(probCapture) != len)
+      stop("Length of probCapture is not the same as len.")
+    ans <- numeric(length = len, init = FALSE)
+    ans[1] <- 1
+    alive <- 1
+    if (len <= 0) return(ans)
+    for (i in 2:len) {
+      if (alive)
+        alive <- rbinom(1, size = 1, prob = probSurvive[i - 1])
+      if (alive) {
+        ans[i] <- rbinom(1, size = 1, prob = probCapture[i])
+      } else {
+        ans[i] <- 0
+      }
+    }
+    return(ans)
+    returnType(double(1))
+  }
+)
+```

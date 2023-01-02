@@ -1,5 +1,5 @@
 ## ----setup, include=FALSE-----------------------------------------------------
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache=FALSE)
 has_nimbleEcology <- require(nimbleEcology)
 has_compareMCMCs <- require(compareMCMCs)
 if(!has_nimbleEcology)
@@ -170,15 +170,15 @@ orchids_info <- list(code=orchids_code, constants=orchids_data, inits=orchids_in
 
 
 ## ---- eval = doDHMMexample----------------------------------------------------
-## orchids_result <- compareMCMCs(
-##   orchids_info,
-##   MCMCs = c("nimble", "jags"),
-##   monitors = c("s", "psiV", "psiF", "psiD"),
-##   MCMCcontrol = list(niter = 20000,
-##                      burnin = 2000)
-## )
-## orchids_result <- renameMCMC(orchids_result, "nimble_orig", "nimble")
-## orchids_result <- renameMCMC(orchids_result, "jags_orig", "jags")
+orchids_result <- compareMCMCs(
+  orchids_info,
+  MCMCs = c("nimble", "jags"),
+  monitors = c("s", "psiV", "psiF", "psiD"),
+  MCMCcontrol = list(niter = 20000,
+                     burnin = 2000)
+)
+orchids_result <- renameMCMC(orchids_result, "nimble_orig", "nimble")
+orchids_result <- renameMCMC(orchids_result, "jags_orig", "jags")
 
 
 ## -----------------------------------------------------------------------------
@@ -262,22 +262,22 @@ orchids_code_faster <- nimbleCode({
 
 
 ## ---- eval=doDHMMexample------------------------------------------------------
-## set.seed(123)
-## orchids_info_faster <- list(code=orchids_code_faster,
-##                             constants=orchids_data,
-##                             inits=orchids_inits())
+set.seed(123)
+orchids_info_faster <- list(code=orchids_code_faster,
+                            constants=orchids_data, 
+                            inits=orchids_inits())
 
 
 ## ---- eval=doDHMMexample------------------------------------------------------
-## orchids_result_faster <- compareMCMCs(
-##   orchids_info_faster,
-##   MCMCs = c("nimble", "jags"),
-##   monitors = c("s", "psiV", "psiF", "psiD"),
-##   MCMCcontrol = list(niter = 20000,
-##                      burnin = 2000)
-## )
-## orchids_result_faster <- renameMCMC(orchids_result_faster, "nimble_faster", "nimble")
-## orchids_result_faster <- renameMCMC(orchids_result_faster, "jags_faster", "jags")
+orchids_result_faster <- compareMCMCs(
+  orchids_info_faster,
+  MCMCs = c("nimble", "jags"),
+  monitors = c("s", "psiV", "psiF", "psiD"),
+  MCMCcontrol = list(niter = 20000,
+                     burnin = 2000)
+)
+orchids_result_faster <- renameMCMC(orchids_result_faster, "nimble_faster", "nimble")
+orchids_result_faster <- renameMCMC(orchids_result_faster, "jags_faster", "jags")
 
 
 ## -----------------------------------------------------------------------------
@@ -374,21 +374,21 @@ orchids_info_DHMM <- list(code=orchids_code_DHMM,
 
 
 ## ---- eval=doDHMMexample------------------------------------------------------
-## orchids_result_DHMM <- compareMCMCs(
-##   orchids_info_DHMM,
-##   MCMCs = c("nimble"),
-##   monitors = c("s", "psiV", "psiF", "psiD"),
-##   MCMCcontrol = list(niter = 20000,
-##                      burnin = 2000)
-## )
-## orchids_result_DHMM <- renameMCMC(orchids_result_DHMM, "nimble_DHMM", "nimble")
+orchids_result_DHMM <- compareMCMCs(
+  orchids_info_DHMM,
+  MCMCs = c("nimble"),
+  monitors = c("s", "psiV", "psiF", "psiD"),
+  MCMCcontrol = list(niter = 20000,
+                     burnin = 2000)
+)
+orchids_result_DHMM <- renameMCMC(orchids_result_DHMM, "nimble_DHMM", "nimble")
 
 
 ## ---- eval=doDHMMexample, echo=FALSE------------------------------------------
-## # Code for generating results that come with slides
-## make_MCMC_comparison_pages(c(orchids_result, orchids_result_faster, orchids_result_DHMM),
-##                            dir = "orchid_results_with_slides",
-##                            modelName = "orchids")
+# Code for generating results that come with slides
+make_MCMC_comparison_pages(c(orchids_result, orchids_result_faster, orchids_result_DHMM),
+                           dir = "orchid_results_with_slides",
+                           modelName = "orchids")
 
 
 ## ---- eval=FALSE--------------------------------------------------------------

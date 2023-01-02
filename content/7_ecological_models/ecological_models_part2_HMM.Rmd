@@ -15,7 +15,7 @@ slides > slide {
 </style>
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache=FALSE)
 has_nimbleEcology <- require(nimbleEcology)
 has_compareMCMCs <- require(compareMCMCs)
 if(!has_nimbleEcology)
