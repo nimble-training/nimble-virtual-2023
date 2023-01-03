@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Style-Type" content="text/css" />
   <meta name="generator" content="pandoc" />
   <meta name="author" content="NIMBLE Development Team" />
-  <title>Introduction to automatic differentiation, including Laplace approximation</title>
+  <title>Programming with automatic differentiation</title>
   <style type="text/css">
     code{white-space: pre-wrap;}
     span.smallcaps{font-variant: small-caps;}
@@ -521,8 +521,7 @@ list-style-type: none;
 </head>
 <body>
 <div class="slide titlepage">
-  <h1 class="title">Introduction to automatic differentiation, including
-Laplace approximation</h1>
+  <h1 class="title">Programming with automatic differentiation</h1>
   <h1 class="subtitle">NIMBLE 2023 Virtual Workshop</h1>
   <p class="author">
 NIMBLE Development Team
@@ -538,777 +537,714 @@ slides > slide {
 }
 </style>
 </div>
-<div id="why-derivatives" class="slide section level1">
-<h1>Why derivatives?</h1>
-<p>Many algorithms require derivatives to work or work well.</p>
+<div id="advanced-uses-of-ad-in-nimble" class="slide section level1">
+<h1>Advanced uses of AD in nimble</h1>
 <ul>
-<li><p>Finding function maximum or minimum (aka optimization)</p></li>
-<li><p>Hamiltonian Monte Carlo (HMC; a kind of MCMC sampler)</p></li>
-<li><p>Other kinds of MCMC samplers, e.g. Langevin.</p></li>
-<li><p>Laplace approximation</p>
-<ul>
-<li>Starts with an optimization.</li>
-<li>Then requires matrix of second derivatives (Hessian)</li>
-</ul></li>
-<li><p>Adaptive Gaussian quadrature (builds upon Laplace
-approx.)</p></li>
-</ul>
-</div>
-<div id="how-do-computers-get-derivatives" class="slide section level1">
-<h1>How do computers get derivatives?</h1>
-<p>Example function:</p>
-<ul>
-<li><span class="math inline">\(y = e^{x^2}\)</span>.</li>
-<li><span class="math inline">\(\frac{dy}{dx} = 2x e^{x^{2}} =
-2xy\)</span>.</li>
-</ul>
-<p>Derivative methods:</p>
-<ol style="list-style-type: decimal">
-<li>Hard-coded analytic function: Developer codes
-<code>2 * x * exp(x^2)</code></li>
-<li>Symbolic algebra: Code processes <code>exp(x^2)</code> into
-<code>2 * x * exp(x^2)</code></li>
-<li>Finite-element approximation: <span class="math inline">\(\frac{dy}{dx} \approx \frac{e^{(x+\delta)^{2}} -
-e^{{x^{2}}}}{\delta}\)</span>, for some small value of <span class="math inline">\(\delta\)</span> (hard to choose in general). Code
-calls function once with input <span class="math inline">\(x\)</span>
-and once with input <span class="math inline">\(x+\delta\)</span>.</li>
-<li><strong>Automatic (or “Algorithmic”) Differentiation:</strong>:
-Carry derivative information through all math operators,
-i.e. <code>^</code> and <code>exp</code> in <span class="math inline">\(e^{{x^{2}}} =\)</span> <code>exp(x^2)</code>.</li>
-</ol>
-</div>
-<div id="automatic-differentiation-ad" class="slide section level1">
-<h1>Automatic Differentiation (AD)</h1>
-<p>Steps to compute <span class="math inline">\(y = e^{x^2}\)</span>
-(<strong>value</strong>) for x = 3.0:</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(x^{2} = 3^2 \rightarrow 9\)</span>.</li>
-<li><span class="math inline">\(e^{x^{2}} = e^9 \rightarrow
-8103.1\)</span>.</li>
-</ol>
-<p>Steps to compute <span class="math inline">\(\frac{dy}{dx}\)</span>
-(using chain rule): <em>Forward mode</em>, i.e. inner derivatives
-first.</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(\frac{d(x^{2})}{dx} = 2x = 2 \times 3
-\rightarrow 6\)</span>.</li>
-<li><span class="math inline">\(\frac{d(e^{x^2})}{dx} =
-\frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = e^{9} \times 6
-= 8103.1 \times 6 \rightarrow 48618.6\)</span>.</li>
-</ol>
-<p>Steps to compute <span class="math inline">\(\frac{dy}{dx}\)</span>
-(using chain rule): <em>Reverse mode</em>, i.e. outer derivatives
-first.</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(\frac{d(e^{x^2})}{d(x^{2})} = e^9
-\rightarrow 8103.1\)</span>.</li>
-<li><span class="math inline">\(\frac{d(e^{x^2})}{dx} =
-\frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = 8103.1 \times
-2x = 8103.1 \times 6 \rightarrow 48618.6\)</span></li>
-</ol>
-</div>
-<div id="some-general-points-about-ad" class="slide section level1">
-<h1>Some general points about AD</h1>
-<ul>
-<li>AD works by stepping through the same sequence of operations
-multiple times, tracking different information each time.</li>
-<li>AD can sometimes be <em>more efficient</em> than using the
-derivative equations explicitly. E.g. <span class="math inline">\(e^{9}
-= 8103.1\)</span> was calculated and can be re-used.</li>
-<li>AD can be iterated to obtain arbitrary-order derivatives.
-Lower-order derivatives must be done before higher-order
-derivatives.</li>
-<li>Forward and reverse modes are each more efficient for different
-kinds of problems, depending on number of inputs and outputs (details
-not discussed here).</li>
-<li>Operations such as matrix multiplication, matrix inversion, matrix
-solving or others can be implemented with matrix AD operations (rather
-than relying on potentially long sequences of scalar operations, which
-can be slow for AD).</li>
-</ul>
-</div>
-<div id="nimble-adopts-the-cppad-c-library-for-ad" class="slide section level1">
-<h1>NIMBLE adopts the CppAD C++ library for AD</h1>
-<ul>
-<li>Huge credit to <a href="https://coin-or.github.io/CppAD/html/CppAD.html"><span style="color:blue">CppAD</span></a>.</li>
-<li>Written by Brad Bell at the University of Washington.</li>
-<li>CppAD is also used by Template Model Builder (TMB).</li>
-<li>CppAD is general and efficient.</li>
-<li>We have written some specialized handling for some cases (“atomic”
-operators, in CppAD terminology).</li>
-<li>CppAD can trace derivatives through arbitrary function calls.</li>
-<li>NIMBLE’s use of CppAD involves deep changes in everything, not just
-calling a few extra functions.</li>
-<li>NIMBLE with CppAD can give derivatives of arbitrary model
-calculations and/or nimbleFunction calculations.</li>
-<li>Care is required for any conditional steps in functions, such as
-if-then-else or for-loops. Normally, conditional branching and looping
-is “baked in” to AD calculations. This is discussed more later.</li>
-</ul>
-</div>
-<div id="some-terminology-for-ad-in-nimble-adapted-from-cppad" class="slide section level1">
-<h1>Some terminology for AD in NIMBLE (adapted from CppAD)</h1>
-<ul>
-<li><p>Orders 0, 1, and 2 are called “Value”, “Jacobian” (or
-“Gradient”), and “Hessian”, respectively.</p></li>
-<li><p>We say that operations are <em>recorded</em> onto a
-<em>tape</em>, which is replayed to obtain values (0th order) and/or
-derivatives (1st and 2nd order).</p></li>
-<li><p>We can take <em>derivatives of derivatives</em>. This involves
-making a <em>tape of the replaying of a tape</em>.</p>
-<ul>
-<li>We call this <strong>double-taping</strong> or
-<strong>meta-taping</strong>.</li>
-</ul></li>
-<li><p>Double-taping can improve efficiency.</p></li>
-<li><p>Double-taping can give derivatives of order &gt; 2.</p></li>
-</ul>
-</div>
-<div id="status-of-ad-in-nimble" class="slide section level1">
-<h1>Status of AD in NIMBLE</h1>
-<ul>
-<li>Use of AD features are “opt-in”, so by default everything should
-work normally, i.e. without AD.</li>
-<li>We made a <a href="https://r-nimble.org/ad-beta">“beta release” or
-“release candidate”</a> in summer 2022.</li>
-<li>We plan to release AD in a regular version of <code>nimble</code>
-soon.</li>
-<li>A draft chapter of our User Manual on AD is <a href="https://r-nimble.org/ADuserManual_draft/chapter_AD.html">here</a>.</li>
-<li>Laplace approximation is currently planned to be included in
-<code>nimble</code> with AD.</li>
-<li>Hamiltonian Monte Carlo (HMC) samplers will be in the separate
-package <a href="https://github.com/nimble-dev/nimbleHMC"><code>nimbleHMC</code></a>,
-which is also available now as a beta release.</li>
-</ul>
-</div>
-<div id="first-example-derivatives-in-a-nimblefunction" class="slide section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>nf1 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">foo =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>()) {</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(<span class="fu">exp</span>(x<span class="sc">^</span><span class="dv">2</span>))</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_foo =</span> <span class="cf">function</span>(<span class="at">x=</span><span class="fu">double</span>()) {</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">foo</span>(x), <span class="at">wrt =</span> <span class="st">&quot;x&quot;</span>, <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>)</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;foo&#39;</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
-</div>
-<div id="first-example-derivatives-in-a-nimblefunction-1" class="slide section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
-<p>Make an object (instance) of nf1:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>nf1obj <span class="ot">&lt;-</span> <span class="fu">nf1</span>()</span></code></pre></div>
-<p>Uncompiled execution:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="dv">3</span>)</span></code></pre></div>
-<pre><code>## Loading required package: numDeriv</code></pre>
-<pre><code>## Loading required namespace: pracma</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] 8103.084
-## Field &quot;jacobian&quot;:
-##         [,1]
-## [1,] 48618.5
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##          [,1]
-## [1,] 307917.2</code></pre>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span><span class="fu">foo</span>(<span class="dv">3</span>) <span class="co"># for comparison of value</span></span></code></pre></div>
-<pre><code>## [1] 8103.084</code></pre>
-</div>
-<div id="first-example-derivatives-in-a-nimblefunction-2" class="slide section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
-<p>Compiled execution:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>cnf1obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf1obj)</span></code></pre></div>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cnf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="dv">3</span>)</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] 8103.084
-## Field &quot;jacobian&quot;:
-##         [,1]
-## [1,] 48618.5
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##          [,1]
-## [1,] 307917.2</code></pre>
-</div>
-<div id="understanding-derivative-outputs" class="slide section level1">
-<h1>Understanding derivative outputs:</h1>
-<ul>
-<li>Define <span class="math inline">\(n\)</span> = length of inputs and
-<span class="math inline">\(m\)</span> = length of outputs.</li>
-<li><strong>value</strong> is a vector of length <span class="math inline">\(m\)</span>.</li>
-<li><strong>jacobian</strong> is an <span class="math inline">\(m \times
-n\)</span> matrix (<span class="math inline">\(m\)</span> rows and <span class="math inline">\(n\)</span> columns).</li>
-<li><strong>hessian</strong> is an <span class="math inline">\(n \times
-n \times m\)</span> array.</li>
-<li>Notice the output index is the <em>first</em> index in
-<em>jacobian</em> but the <em>last</em> index in <em>hessian</em>.</li>
-<li>First two indices of <em>hessian</em> are interchangeable due to
-symmetry of partial derivatives.</li>
-<li>You can omit lower-orders (e.g., use <code>order = 1</code> for the
-jacobian only, omitting the value), but lower orders <em>will be
-calculated</em> in order to obtain higher orders.</li>
-<li><code>ADNimbleList()</code> is a pre-defined <em>nimbleList</em>
-type with elements <code>value</code>, <code>jacobian</code>, and
-<code>hessian</code>.</li>
-</ul>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities" class="slide section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Make a simple model.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>model_code <span class="ot">&lt;-</span> <span class="fu">nimbleCode</span>({</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  y <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="at">mean =</span> mu, <span class="at">sd =</span> sigma)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  mu <span class="ot">&lt;-</span> intercept <span class="sc">+</span> slope <span class="sc">*</span> x</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  intercept <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> <span class="dv">1000</span>)</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  sigma <span class="sc">~</span> <span class="fu">dunif</span>(<span class="dv">0</span>, <span class="dv">10</span>)</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>m <span class="ot">&lt;-</span> <span class="fu">nimbleModel</span>(model_code,</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>                 <span class="at">inits =</span> <span class="fu">list</span>(<span class="at">intercept =</span> <span class="fl">1.2</span>, <span class="at">slope =</span> <span class="fl">0.5</span>,</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>                              <span class="at">sigma =</span> <span class="fl">0.7</span>),</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> <span class="fu">list</span>(<span class="at">y =</span> <span class="dv">6</span>),</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>                 <span class="at">constants =</span> <span class="fu">list</span>(<span class="at">x =</span> <span class="dv">10</span>),</span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>                 <span class="at">buildDerivs =</span> <span class="cn">TRUE</span>, <span class="co"># ALLOW DERIVATIVES FOR THIS MODEL</span></span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>                 )</span></code></pre></div>
-<pre><code>## Defining model</code></pre>
-<pre><code>## Building model</code></pre>
-<pre><code>## Setting data and initial values</code></pre>
-<pre><code>## Running calculate on model
-##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
-<pre><code>## Checking model sizes and dimensions</code></pre>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-1" class="slide section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Write a nimbleFunction to get derivatives of model$calculate.</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>nf2 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(model, nodes) {},</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_log_prob =</span> <span class="cf">function</span>() {</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(model<span class="sc">$</span><span class="fu">calculate</span>(nodes),</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>                  <span class="at">wrt=</span><span class="fu">c</span>(<span class="st">&quot;intercept&quot;</span>, <span class="st">&quot;slope&quot;</span>, <span class="st">&quot;sigma&quot;</span>),</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>                  <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>)</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-2" class="slide section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Use it uncompiled.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>calc_nodes <span class="ot">&lt;-</span> m<span class="sc">$</span><span class="fu">getDependencies</span>(<span class="fu">c</span>(<span class="st">&quot;intercept&quot;</span>, <span class="st">&quot;slope&quot;</span>, <span class="st">&quot;sigma&quot;</span>))</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>calc_nodes</span></code></pre></div>
-<pre><code>## [1] &quot;intercept&quot; &quot;sigma&quot;     &quot;mu&quot;        &quot;y&quot;</code></pre>
-<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>nf2obj <span class="ot">&lt;-</span> <span class="fu">nf2</span>(m, calc_nodes)</span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span><span class="fu">derivs_log_prob</span>()</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -10.73236
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]      [,3]
-## [1,] -0.4081645 -4.081633 -1.311953
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##            [,1]       [,2]      [,3]
-## [1,]  -2.040817  -20.40816  1.166181
-## [2,] -20.408163 -204.08163 11.661808
-## [3,]   1.166181   11.66181  1.541025</code></pre>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-3" class="slide section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Use it compiled.</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>comp <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(m, nf2obj)</span></code></pre></div>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>comp<span class="sc">$</span>nf2obj<span class="sc">$</span><span class="fu">derivs_log_prob</span>()</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -10.73236
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]      [,3]
-## [1,] -0.4081645 -4.081633 -1.311953
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##            [,1]       [,2]      [,3]
-## [1,]  -2.040817  -20.40816  1.166181
-## [2,] -20.408163 -204.08163 11.661808
-## [3,]   1.166181   11.66181  1.541025</code></pre>
-</div>
-<div id="more-about-understanding-outputs-and-testing" class="slide section level1">
-<h1>More about understanding outputs and testing</h1>
-<ul>
-<li><p>Uncompiled derivatives use finite-element methods from packages
-<code>numDeriv</code> and/or <code>pracma</code>.</p>
-<ul>
-<li>These might not match compiled derivatives exactly due to
-finite-element approximation.</li>
-<li>Uncompiled execution can be slow for large calculations.</li>
-</ul></li>
-<li><p>The first compiled call to <code>derivs</code> (aka
-<code>nimDerivs</code>) records the AD tape, so it is much slower than
-later calls.</p></li>
-<li><p>Always test compiled derivatives on new values after the first
-call.</p>
-<ul>
-<li>This checks that values have not been (incorrectly) “baked in” to
-the AD tape.</li>
-<li>This was not illustrated in first two examples.</li>
-</ul></li>
-<li><p>Model inputs are ordered to match the <code>wrt</code> argument,
-flattened and concatenated.</p>
-<ul>
-<li>This is essential to use <code>jacobian</code> and
-<code>hessian</code> results correctly.</li>
-</ul></li>
-</ul>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations." class="slide section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Use the same model as above. For good measure, make a new copy.</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>m2 <span class="ot">&lt;-</span> m<span class="sc">$</span><span class="fu">newModel</span>()</span></code></pre></div>
-<pre><code>## Setting data and initial values</code></pre>
-<pre><code>## Running calculate on model
-##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
-<pre><code>## Checking model sizes and dimensions</code></pre>
-<p>Say we will provide a vector of
-<code>(intercept, slope, log_sigma)</code> and we need to calculate
-<code>sigma = exp(log_sigma)</code> before using it in the model.</p>
-<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>nf3 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(model, param_nodes, calc_nodes) {</span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># param_nodes will be c(&quot;intercept&quot;, &quot;slope&quot;, &quot;sigma&quot;)</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    updateNodes <span class="ot">&lt;-</span> <span class="fu">character</span>() <span class="co"># more about these later</span></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    constantNodes <span class="ot">&lt;-</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>  },</span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">run =</span> <span class="cf">function</span>(<span class="at">param_values =</span> <span class="fu">double</span>(<span class="dv">1</span>)) {</span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># param_values will be (intercept, slope, log_sigma)</span></span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    param_values[<span class="dv">3</span>] <span class="ot">&lt;-</span> <span class="fu">exp</span>(param_values[<span class="dv">3</span>])</span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">values</span>(model, param_nodes) <span class="ot">&lt;&lt;-</span> param_values <span class="co"># The ONLY valid way to put values in a model for AD</span></span>
-<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    log_prob <span class="ot">&lt;-</span> model<span class="sc">$</span><span class="fu">calculate</span>(calc_nodes)</span>
-<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(log_prob)</span>
-<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
-<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a>  },</span>
-<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
-<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_run =</span> <span class="cf">function</span>(<span class="at">param_values =</span> <span class="fu">double</span>(<span class="dv">1</span>)) {</span>
-<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a>      wrt <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(param_values) <span class="co"># indices, not names</span></span>
-<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a>      ans <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">run</span>(param_values), <span class="at">wrt =</span> wrt,</span>
-<span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>                    <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">2</span>,</span>
-<span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>                    <span class="at">updateNodes =</span> updateNodes,</span>
-<span id="cb32-21"><a href="#cb32-21" aria-hidden="true" tabindex="-1"></a>                    <span class="at">constantNodes =</span> constantNodes,</span>
-<span id="cb32-22"><a href="#cb32-22" aria-hidden="true" tabindex="-1"></a>                    <span class="at">model =</span> model)</span>
-<span id="cb32-23"><a href="#cb32-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(ans)</span>
-<span id="cb32-24"><a href="#cb32-24" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
-<span id="cb32-25"><a href="#cb32-25" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb32-26"><a href="#cb32-26" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb32-27"><a href="#cb32-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;run&#39;</span></span>
-<span id="cb32-28"><a href="#cb32-28" aria-hidden="true" tabindex="-1"></a>) </span></code></pre></div>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations.-1" class="slide section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Make an object:</p>
-<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>param_nodes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;intercept&quot;</span>, <span class="st">&quot;slope&quot;</span>, <span class="st">&quot;sigma&quot;</span>)</span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>calc_nodes <span class="ot">&lt;-</span> m2<span class="sc">$</span><span class="fu">getDependencies</span>(param_nodes, <span class="at">self =</span> <span class="cn">FALSE</span>) <span class="co"># omit priors, just to make it more interesting</span></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>calc_nodes</span></code></pre></div>
-<pre><code>## [1] &quot;mu&quot; &quot;y&quot;</code></pre>
-<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>nf3obj <span class="ot">&lt;-</span> <span class="fu">nf3</span>(m2, param_nodes, calc_nodes)</span></code></pre></div>
-<p>Use it uncompiled:</p>
-<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">1.2</span>, .<span class="dv">5</span>, <span class="fu">log</span>(<span class="fl">0.7</span>))</span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>nf3obj<span class="sc">$</span><span class="fu">derivs_run</span>(x)</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -0.6030799
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]       [,3]
-## [1,] -0.4081633 -4.081633 -0.9183673
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##             [,1]        [,2]       [,3]
-## [1,]  -2.0408163  -20.408163  0.8163265
-## [2,] -20.4081633 -204.081633  8.1632654
-## [3,]   0.8163265    8.163265 -0.1632653</code></pre>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations.-2" class="slide section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Use it compiled:</p>
-<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>comp2 <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(m2, nf3obj)</span></code></pre></div>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>x_tape <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">1.4</span>, .<span class="dv">2</span>, <span class="fu">log</span>(<span class="fl">0.4</span>))</span>
-<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>comp2<span class="sc">$</span>nf3obj<span class="sc">$</span><span class="fu">derivs_run</span>(x_tape)</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -21.12765
-## Field &quot;jacobian&quot;:
-##       [,1]  [,2]  [,3]
-## [1,] 16.25 162.5 41.25
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##        [,1]   [,2]   [,3]
-## [1,]  -6.25  -62.5  -32.5
-## [2,] -62.50 -625.0 -325.0
-## [3,] -32.50 -325.0  -84.5</code></pre>
-<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>x <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">1.2</span>, .<span class="dv">5</span>, <span class="fu">log</span>(<span class="fl">0.7</span>))</span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>comp2<span class="sc">$</span>nf3obj<span class="sc">$</span><span class="fu">derivs_run</span>(x)</span></code></pre></div>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -0.6030799
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]       [,3]
-## [1,] -0.4081633 -4.081633 -0.9183673
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##             [,1]        [,2]       [,3]
-## [1,]  -2.0408163  -20.408163  0.8163265
-## [2,] -20.4081633 -204.081633  8.1632653
-## [3,]   0.8163265    8.163265 -0.1632653</code></pre>
-</div>
-<div id="understanding-the-results" class="slide section level1">
-<h1>Understanding the results</h1>
-<ul>
-<li><p><code>values(model, nodes) &lt;&lt;- x</code> is the
-<em>only</em> way to put values into model nodes that will be recorded
-on the AD tape.</p></li>
-<li><p><code>model$x &lt;&lt;- value</code> and
-<code>model[[node]] &lt;&lt;- value</code> will not be recorded and are
-errors. They may be supported in the future.</p></li>
-<li><p>In example 3, only derivatives with respect to (wrt) the third
-input differ from example 2, because example 3 includes
-<code>sigma = exp(log_sigma)</code>.</p></li>
-<li><p><code>updateNodes</code> and <code>constantNodes</code> are
-essential for correct use of the model and correct results. We will
-cover these more later.</p></li>
-<li><p>Other points not covered yet include:</p>
-<ul>
+<li>What variables and/or steps get “baked in” to AD tapes</li>
 <li><code>reset</code> argument to <code>derivs</code> (aka
-<code>nimDerivs</code>), which resets the AD tape.</li>
-<li><code>wrt</code> argument can be indices or names.</li>
-<li>What variables and/or steps get “baked in” to AD tapes.</li>
-<li>Omitting variables from derivative tracking.</li>
-<li>Double-taping.</li>
-<li>System for generic parameter transformations.</li>
-</ul></li>
+<code>nimDerivs</code>)</li>
+<li>Holding variables out of AD tracking.</li>
+<li>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD</li>
+<li>More about using AD with models</li>
+<li>Using AD in user-defined functions and distributions</li>
+<li>Generic parameter transformations</li>
+<li>Double-taping for potential efficiency</li>
 </ul>
 </div>
-<div id="summary-of-ways-to-use-ad" class="slide section level1">
-<h1>Summary of ways to use AD</h1>
+<div id="when-values-are-baked-in-to-ad-tapes" class="slide section level1">
+<h1>When values are “baked in” to AD tapes</h1>
+<p>If a variable is not subject to derivative-tracking, its value will
+enter the AD tape during recording and can’t be changed until the tape
+is reset.</p>
+<p>Example: <code>y = exp(c * x^2)</code> where <code>c</code> will not
+be tracked for derivatives.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>nf1 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Setup argument c will become member data of a C++ class.</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># It will not have derivative-tracking.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(c) {},</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">foo =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>()) {</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(<span class="fu">exp</span>(c <span class="sc">*</span> x<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_foo =</span> <span class="cf">function</span>(<span class="at">x=</span><span class="fu">double</span>()) {</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">foo</span>(x), <span class="at">wrt =</span> <span class="st">&quot;x&quot;</span>, <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;foo&#39;</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="when-values-are-baked-in-to-ad-tapes-cont." class="slide section level1">
+<h1>When values are “baked in” to AD tapes (cont.)</h1>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>nf1obj <span class="ot">&lt;-</span> <span class="fu">nf1</span>(<span class="fl">0.1</span>) <span class="co"># c = 0.1</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>Cnf1obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf1obj)</span></code></pre></div>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>)</span></code></pre></div>
+<pre><code>## Loading required package: numDeriv</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>Cnf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Always test with an input not used for recording the tape</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>Cnf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Change the value of c</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span>c <span class="ot">&lt;-</span> <span class="fl">0.2</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>Cnf1obj<span class="sc">$</span>c <span class="ot">&lt;-</span> <span class="fl">0.2</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>nf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>Cnf1obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>) <span class="co"># WRONG!!!</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<p>The last <code>Cnf1obj$derivs_foo(2.5)</code> gives the <strong>wrong
+answer</strong> because the tape has <code>c = 0.1</code> baked in.</p>
+</div>
+<div id="how-to-reset-tapes-with-new-baked-in-values" class="slide section level1">
+<h1>How to reset tapes with new baked-in values</h1>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>nf2 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(c) {},</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">foo =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>()) {</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(<span class="fu">exp</span>(c <span class="sc">*</span> x<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_foo =</span> <span class="cf">function</span>(<span class="at">x=</span><span class="fu">double</span>(),</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>                          <span class="at">reset =</span> <span class="fu">logical</span>(<span class="dv">0</span>, <span class="at">default =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">foo</span>(x), <span class="at">wrt =</span> <span class="st">&quot;x&quot;</span>, <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>, <span class="at">reset =</span> reset)</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;foo&#39;</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="how-to-reset-tapes-with-new-baked-in-values-cont." class="slide section level1">
+<h1>How to reset tapes with new baked-in values (cont.)</h1>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>nf2obj <span class="ot">&lt;-</span> <span class="fu">nf2</span>(<span class="fl">0.1</span>) <span class="co"># c = 0.1</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>Cnf2obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf2obj)</span></code></pre></div>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>Cnf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Test with an input not used for recording the tape</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>Cnf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Change the value of c</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span>c <span class="ot">&lt;-</span> <span class="fl">0.2</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>Cnf2obj<span class="sc">$</span>c <span class="ot">&lt;-</span> <span class="fl">0.2</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>Cnf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>, <span class="at">reset=</span><span class="cn">TRUE</span>) <span class="co"># Record a new tape</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Test with an input not used for recording the tape</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>nf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>Cnf2obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>) <span class="do">## CORRECT</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="holding-variables-out-of-ad-tracking" class="slide section level1">
+<h1>Holding variables out of AD tracking</h1>
+<p>We may want to include <code>c</code> as an argument but gain
+efficiency by never tracking derivatives through it if we don’t need
+to.</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>nf3 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">foo =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>(),</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>                   <span class="at">c1 =</span> <span class="fu">double</span>(),    <span class="co"># Below we say to ignore c1</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>                   <span class="at">c2 =</span> <span class="fu">integer</span>()) { <span class="co"># Integers never have derivatives tracked</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(<span class="fu">exp</span>(c1 <span class="sc">*</span> c2 <span class="sc">*</span> x<span class="sc">^</span><span class="dv">2</span>))</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_foo =</span> <span class="cf">function</span>(<span class="at">x=</span><span class="fu">double</span>(),</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>                          <span class="at">c1 =</span> <span class="fu">double</span>(),</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>                          <span class="at">c2 =</span> <span class="fu">integer</span>(),</span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>                          <span class="at">reset =</span> <span class="fu">logical</span>(<span class="dv">0</span>, <span class="at">default =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">foo</span>(x, c1, c2), <span class="at">wrt =</span> <span class="st">&quot;x&quot;</span>, <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>, <span class="at">reset =</span> reset)</span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="fu">list</span>(<span class="at">foo =</span> <span class="fu">list</span>(<span class="at">ignore =</span> <span class="st">&quot;c1&quot;</span>))</span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="holding-variables-out-of-ad-tracking-cont" class="slide section level1">
+<h1>Holding variables out of AD tracking (cont)</h1>
+<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>nf3obj <span class="ot">&lt;-</span> <span class="fu">nf3</span>()</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>Cnf3obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf3obj)</span></code></pre></div>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>nf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>,  <span class="fl">0.05</span>, <span class="dv">2</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>Cnf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>, <span class="fl">0.05</span>, <span class="dv">2</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Test with an input not used for recording the tape</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>nf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="fl">0.05</span>, <span class="dv">2</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>Cnf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="fl">0.05</span>, <span class="dv">2</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use new values of c1 and/or c2:</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>nf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="fl">0.1</span>, <span class="dv">2</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>Cnf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="fl">0.1</span>, <span class="dv">2</span>) <span class="co"># ERROR: old values of c1 and c2 are in the tape</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>Cnf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">3.</span>, <span class="fl">0.1</span>, <span class="dv">2</span>, <span class="at">reset=</span><span class="cn">TRUE</span>) <span class="co"># Record a new tape (with any value of x)</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>Cnf3obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="fl">0.1</span>, <span class="dv">2</span>) <span class="co"># CORRECT: with c1=.1 and c2 = 2</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="understanding-if-then-else-and-for-loops-in-ad" class="slide section level1">
+<h1>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD</h1>
+<p>Any conditional branching or looping is baked into the tape (aka
+“unrolled” in the tape).</p>
+<p>Here is a strange way to calculate either <span class="math inline">\(x^p\)</span> or <span class="math inline">\((0.5
+x)^p\)</span>.</p>
+<div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>nf4 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">foo =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>(),</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>                   <span class="at">p =</span> <span class="fu">double</span>(),</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>                   <span class="at">half =</span> <span class="fu">logical</span>()) { <span class="co"># Will be an integer, but say I use double()</span></span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>      <span class="cf">if</span>(<span class="sc">!</span>half) {</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>        ans <span class="ot">&lt;-</span> x</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>p) {</span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a>          ans <span class="ot">&lt;-</span> ans<span class="sc">*</span>x</span>
+<span id="cb55-11"><a href="#cb55-11" aria-hidden="true" tabindex="-1"></a>        }  </span>
+<span id="cb55-12"><a href="#cb55-12" aria-hidden="true" tabindex="-1"></a>      } <span class="cf">else</span> {</span>
+<span id="cb55-13"><a href="#cb55-13" aria-hidden="true" tabindex="-1"></a>        ans <span class="ot">&lt;-</span> <span class="fl">0.5</span><span class="sc">*</span>x</span>
+<span id="cb55-14"><a href="#cb55-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>p) {</span>
+<span id="cb55-15"><a href="#cb55-15" aria-hidden="true" tabindex="-1"></a>          ans <span class="ot">&lt;-</span> ans<span class="sc">*</span>(<span class="fl">0.5</span><span class="sc">*</span>x)</span>
+<span id="cb55-16"><a href="#cb55-16" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb55-17"><a href="#cb55-17" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb55-18"><a href="#cb55-18" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(ans)</span>
+<span id="cb55-19"><a href="#cb55-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
+<span id="cb55-20"><a href="#cb55-20" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb55-21"><a href="#cb55-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_foo =</span> <span class="cf">function</span>(<span class="at">x=</span><span class="fu">double</span>(),</span>
+<span id="cb55-22"><a href="#cb55-22" aria-hidden="true" tabindex="-1"></a>                          <span class="at">p =</span> <span class="fu">double</span>(),</span>
+<span id="cb55-23"><a href="#cb55-23" aria-hidden="true" tabindex="-1"></a>                          <span class="at">half =</span> <span class="fu">logical</span>(),</span>
+<span id="cb55-24"><a href="#cb55-24" aria-hidden="true" tabindex="-1"></a>                          <span class="at">reset =</span> <span class="fu">logical</span>(<span class="dv">0</span>, <span class="at">default =</span> <span class="cn">FALSE</span>)) {</span>
+<span id="cb55-25"><a href="#cb55-25" aria-hidden="true" tabindex="-1"></a>      d <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">foo</span>(x, p, half), <span class="at">wrt =</span> <span class="st">&quot;x&quot;</span>, <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>, <span class="at">reset =</span> reset)</span>
+<span id="cb55-26"><a href="#cb55-26" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(d)</span>
+<span id="cb55-27"><a href="#cb55-27" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>()) </span>
+<span id="cb55-28"><a href="#cb55-28" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb55-29"><a href="#cb55-29" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb55-30"><a href="#cb55-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="fu">list</span>(<span class="at">foo =</span> <span class="fu">list</span>(<span class="at">ignore =</span> <span class="fu">c</span>(<span class="st">&#39;p&#39;</span>,<span class="st">&#39;i&#39;</span>))) <span class="co"># Necessary to avoid an error</span></span>
+<span id="cb55-31"><a href="#cb55-31" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div id="understanding-if-then-else-and-for-loops-in-ad-cont." class="slide section level1">
+<h1>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD (cont.)</h1>
+<div class="sourceCode" id="cb56"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a>nf4obj <span class="ot">&lt;-</span> <span class="fu">nf4</span>()</span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>Cnf4obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf4obj)</span></code></pre></div>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compare compiled and uncompiled</span></span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>nf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">1.5</span>, <span class="dv">3</span>, <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 5.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 13.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>Cnf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">1.5</span>, <span class="dv">3</span>, <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 5.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 13.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Test with an input not used for recording the tape</span></span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>nf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="dv">3</span>, <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>Cnf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="dv">3</span>, <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Use new values of p and/or half:</span></span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>nf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="dv">4</span>, <span class="cn">TRUE</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.051758
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 6.103516
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>Cnf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="dv">4</span>, <span class="cn">TRUE</span>) <span class="co"># ERROR: old values of p and half are used</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb70"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a>Cnf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">1.5</span>, <span class="dv">4</span>, <span class="cn">TRUE</span>, <span class="at">reset=</span><span class="cn">TRUE</span>) <span class="co"># Record a new tape (with any value of x)</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 0.2373047
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] 0.7910156
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb72"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>Cnf4obj<span class="sc">$</span><span class="fu">derivs_foo</span>(<span class="fl">2.5</span>, <span class="dv">4</span>, <span class="cn">TRUE</span>) <span class="co"># CORRECT: with p=4 and half=TRUE</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.051758
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 6.103516
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="more-about-using-ad-with-models" class="slide section level1">
+<h1>More about using AD with models</h1>
 <ul>
-<li>For calculations outside of a model:
-<code>nimDerivs(foo(x), ...)</code> , i.e. “nimDerivs of a
-function”.</li>
-<li>For model log probabilities with no other steps:
-<code>nimDerivs(model$calculate(...), ...)</code>, i.e. “nimDerivs of
-model calculate”.</li>
-<li>For model log probabilities amid other steps:
-<code>nimDerivs(foo(x),...)</code> where <code>foo(x)</code> contains
-<code>model$calculate(...)</code>, i.e. “nimDerivs of a function
-containing model calculate”.</li>
+<li>When recording a tape using a model, all values that will be used
+need to be copied (internally) from the regular model to the AD model.
+You need to provide information about which nodes are needed, in two
+categories: <code>constantNodes</code> (not the same as
+<code>constants</code> in <code>nimbleModel</code>) and
+<code>updateNodes</code>.</li>
+<li>When using a tape recorded with a model, one can update values that
+might have changed (without resetting the tape).</li>
+</ul>
+<p>Let’s look at an example (simple model used earlier):</p>
+<div class="sourceCode" id="cb74"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a>model_code <span class="ot">&lt;-</span> <span class="fu">nimbleCode</span>({</span>
+<span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a>  y <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="at">mean =</span> mu, <span class="at">sd =</span> sigma)</span>
+<span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>  mu <span class="ot">&lt;-</span> intercept <span class="sc">+</span> slope <span class="sc">*</span> x</span>
+<span id="cb74-4"><a href="#cb74-4" aria-hidden="true" tabindex="-1"></a>  intercept <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> <span class="dv">1000</span>)</span>
+<span id="cb74-5"><a href="#cb74-5" aria-hidden="true" tabindex="-1"></a>  sigma <span class="sc">~</span> <span class="fu">dunif</span>(<span class="dv">0</span>, <span class="dv">10</span>)</span>
+<span id="cb74-6"><a href="#cb74-6" aria-hidden="true" tabindex="-1"></a>})</span></code></pre></div>
+<ul>
+<li>Say <code>y</code> is data.</li>
+<li><code>model$calculate(&#39;y&#39;)</code> returns the log probability
+density of <code>y</code>.</li>
+<li><code>model$calculate(c(&#39;mu&#39;,&#39;y&#39;))</code> calculates <code>mu</code>
+and then returns the log probability density of <code>y</code>.</li>
+<li>Say we will want derivative(s) of
+<code>model$calculate(&#39;mu&#39;, &#39;y&#39;)</code> with respect to
+<code>slope</code>.</li>
+<li>Values needed: <code>y</code>, <code>intercept</code>,
+<code>slope</code>, <code>x</code>, and <code>sigma</code>.</li>
+<li>Values that might <strong>not</strong> change between derivative
+calls: <code>y</code>, <code>x</code>. These are
+<strong>constantNodes</strong>.</li>
+<li>Values that might change between derivative calls:
+<code>intercept</code>, <code>slope</code>, <code>sigma</code>. These
+are <strong>updateNodes</strong>.</li>
 </ul>
 </div>
-<div id="fourth-example-laplace-approximation" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Laplace approximation:</p>
-<ul>
-<li><p>data: <span class="math inline">\(y\)</span></p></li>
-<li><p>random effect: <span class="math inline">\(x\)</span></p></li>
-<li><p>parameters: <span class="math inline">\(\theta\)</span></p></li>
-<li><p>Want marginal probability of data: <span class="math inline">\(\int P(y | x, \theta) P(x | \theta)
-dx\)</span>.</p></li>
-<li><p>Approximate by:</p>
-<ul>
-<li>Find <span class="math inline">\(x^{*}\)</span> that maximizes <span class="math inline">\(P(y | x, \theta) P(x | \theta)\)</span> with
-respect to <span class="math inline">\(x\)</span>.</li>
-<li>Compute the Hessian of <span class="math inline">\(\log(P(y | x,
-\theta) P(x | \theta))\)</span> at <span class="math inline">\(x =
-x^{*}\)</span>.</li>
-<li>Do a calculation with <span class="math inline">\(P(y | x^{*},
-\theta) P(x^{*} | \theta)\)</span> and the Hessian.</li>
-</ul></li>
-</ul>
-</div>
-<div id="fourth-example-use-deer-e.-cervi-glmm" class="slide section level1">
-<h1>Fourth example: Use Deer E. cervi GLMM</h1>
-<p>We’ve used this previously. Here is the code in case we need to look
-at it:</p>
-<div class="sourceCode" id="cb44"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>DEcode <span class="ot">&lt;-</span> <span class="fu">nimbleCode</span>({</span>
-<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>) {</span>
-<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Priors for intercepts and length coefficients for sex = 1 (male), 2 (female)</span></span>
-<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>    sex_int[i] <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> <span class="dv">1000</span>)</span>
-<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>    length_coef[i] <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> <span class="dv">1000</span>)</span>
-<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Priors for farm random effects and their standard deviation.</span></span>
-<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>  farm_sd <span class="sc">~</span> <span class="fu">dunif</span>(<span class="dv">0</span>, <span class="dv">20</span>)</span>
-<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>num_farms) {</span>
-<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>    farm_effect[i] <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> farm_sd)</span>
-<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb44-14"><a href="#cb44-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># logit link and Bernoulli data probabilities</span></span>
-<span id="cb44-15"><a href="#cb44-15" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span>(i <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>num_animals) {</span>
-<span id="cb44-16"><a href="#cb44-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">logit</span>(disease_probability[i]) <span class="ot">&lt;-</span></span>
-<span id="cb44-17"><a href="#cb44-17" aria-hidden="true" tabindex="-1"></a>      sex_int[ sex[i] ] <span class="sc">+</span></span>
-<span id="cb44-18"><a href="#cb44-18" aria-hidden="true" tabindex="-1"></a>      length_coef[ sex[i] ]<span class="sc">*</span>length[i] <span class="sc">+</span></span>
-<span id="cb44-19"><a href="#cb44-19" aria-hidden="true" tabindex="-1"></a>      farm_effect[ farm_ids[i] ]</span>
-<span id="cb44-20"><a href="#cb44-20" aria-hidden="true" tabindex="-1"></a>    Ecervi_01[i] <span class="sc">~</span> <span class="fu">dbern</span>(disease_probability[i])</span>
-<span id="cb44-21"><a href="#cb44-21" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb44-22"><a href="#cb44-22" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb44-23"><a href="#cb44-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb44-24"><a href="#cb44-24" aria-hidden="true" tabindex="-1"></a>DEconstants <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">num_farms =</span> <span class="dv">24</span>,</span>
-<span id="cb44-25"><a href="#cb44-25" aria-hidden="true" tabindex="-1"></a>                    <span class="at">num_animals =</span> <span class="dv">826</span>,</span>
-<span id="cb44-26"><a href="#cb44-26" aria-hidden="true" tabindex="-1"></a>                    <span class="at">length =</span> DeerEcervi<span class="sc">$</span>ctrLength,</span>
-<span id="cb44-27"><a href="#cb44-27" aria-hidden="true" tabindex="-1"></a>                    <span class="at">sex =</span> DeerEcervi<span class="sc">$</span>Sex,</span>
-<span id="cb44-28"><a href="#cb44-28" aria-hidden="true" tabindex="-1"></a>                    <span class="at">farm_ids =</span> DeerEcervi<span class="sc">$</span>farm_ids)</span></code></pre></div>
-</div>
-<div id="fourth-example-laplace-approximation-1" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Make Deer E. cervi model with derivative tools built.</p>
-<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>DEmodel <span class="ot">&lt;-</span> <span class="fu">nimbleModel</span>(DEcode,</span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>                       <span class="at">data =</span> DEdata,</span>
-<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>                       <span class="at">constants =</span> DEconstants,</span>
-<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>                       <span class="at">inits =</span> DEinits_vals,</span>
-<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>                       <span class="at">buildDerivs =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<div id="more-about-using-ad-with-models-cont." class="slide section level1">
+<h1>More about using AD with models (cont.)</h1>
+<p>Build the example model:</p>
+<div class="sourceCode" id="cb75"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a>model_code <span class="ot">&lt;-</span> <span class="fu">nimbleCode</span>({</span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a>  y <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="at">mean =</span> mu, <span class="at">sd =</span> sigma)</span>
+<span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>  mu <span class="ot">&lt;-</span> intercept <span class="sc">+</span> slope <span class="sc">*</span> x</span>
+<span id="cb75-4"><a href="#cb75-4" aria-hidden="true" tabindex="-1"></a>  intercept <span class="sc">~</span> <span class="fu">dnorm</span>(<span class="dv">0</span>, <span class="at">sd =</span> <span class="dv">1000</span>)</span>
+<span id="cb75-5"><a href="#cb75-5" aria-hidden="true" tabindex="-1"></a>  sigma <span class="sc">~</span> <span class="fu">dunif</span>(<span class="dv">0</span>, <span class="dv">10</span>)</span>
+<span id="cb75-6"><a href="#cb75-6" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb75-7"><a href="#cb75-7" aria-hidden="true" tabindex="-1"></a>m <span class="ot">&lt;-</span> <span class="fu">nimbleModel</span>(model_code,</span>
+<span id="cb75-8"><a href="#cb75-8" aria-hidden="true" tabindex="-1"></a>                 <span class="at">inits =</span> <span class="fu">list</span>(<span class="at">intercept =</span> <span class="fl">1.2</span>, <span class="at">slope =</span> <span class="fl">0.5</span>,</span>
+<span id="cb75-9"><a href="#cb75-9" aria-hidden="true" tabindex="-1"></a>                              <span class="at">sigma =</span> <span class="fl">0.7</span>),</span>
+<span id="cb75-10"><a href="#cb75-10" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> <span class="fu">list</span>(<span class="at">y =</span> <span class="dv">6</span>, <span class="at">x =</span> <span class="fl">8.3</span>), <span class="co"># Notice I put x as data, not constants</span></span>
+<span id="cb75-11"><a href="#cb75-11" aria-hidden="true" tabindex="-1"></a>                 <span class="at">buildDerivs =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb75-12"><a href="#cb75-12" aria-hidden="true" tabindex="-1"></a>                 )</span></code></pre></div>
 <pre><code>## Defining model</code></pre>
 <pre><code>## Building model</code></pre>
 <pre><code>## Setting data and initial values</code></pre>
 <pre><code>## Running calculate on model
 ##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
 <pre><code>## Checking model sizes and dimensions</code></pre>
-<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>C_DEmodel <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(DEmodel)</span></code></pre></div>
+<div class="sourceCode" id="cb81"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a>cm <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(m)</span></code></pre></div>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<p>Scalar constants are baked into a model and do not exist as nodes, so
+I made <code>x</code> be data for illustration.</p>
 </div>
-<div id="fourth-example-laplace-approximation-2" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Here is a nimbleFunction for a basic univariate Laplace
-approximation.</p>
-<div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>simple_1D_Laplace <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
-<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(model, RE_node, calc_nodes) {</span>
-<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>    derivsInfo <span class="ot">&lt;-</span> <span class="fu">makeDerivsInfo</span>(model, RE_node, calc_nodes)</span>
-<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>    updateNodes <span class="ot">&lt;-</span> derivsInfo<span class="sc">$</span>updateNodes</span>
-<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>    constantNodes <span class="ot">&lt;-</span> derivsInfo<span class="sc">$</span>constantNodes</span>
-<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>  },</span>
-<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
-<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Calculate -log(P(y | x, theta) P(x | theta)) from input x</span></span>
-<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">negLogLik =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>(<span class="dv">1</span>)) {</span>
-<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">values</span>(model, RE_node) <span class="ot">&lt;&lt;-</span> x</span>
-<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a>      res <span class="ot">&lt;-</span> <span class="sc">-</span>model<span class="sc">$</span><span class="fu">calculate</span>(calc_nodes)</span>
-<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(res)</span>
-<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
-<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get derivatives of -log(P(y | x, theta) P(x | theta))</span></span>
-<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_negLogLik =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>(<span class="dv">1</span>),</span>
-<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a>                                <span class="at">order =</span> <span class="fu">integer</span>(<span class="dv">1</span>)) {</span>
-<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a>      ans <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">negLogLik</span>(x), <span class="at">wrt =</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">length</span>(x), <span class="at">order =</span> order,</span>
-<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a>                   <span class="at">updateNodes =</span> updateNodes,</span>
-<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a>                   <span class="at">constantNodes =</span> constantNodes,</span>
-<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a>                   <span class="at">model =</span> model)</span>
-<span id="cb53-22"><a href="#cb53-22" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(ans)</span>
-<span id="cb53-23"><a href="#cb53-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
-<span id="cb53-24"><a href="#cb53-24" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb53-25"><a href="#cb53-25" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Pull out the gradient of -log(P(y | x, theta) P(x | theta))</span></span>
-<span id="cb53-26"><a href="#cb53-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">gr_negLogLik =</span> <span class="cf">function</span>(<span class="at">x =</span> <span class="fu">double</span>(<span class="dv">1</span>)) {</span>
-<span id="cb53-27"><a href="#cb53-27" aria-hidden="true" tabindex="-1"></a>      gr <span class="ot">&lt;-</span> <span class="fu">derivs_negLogLik</span>(x, <span class="at">order =</span> <span class="fu">c</span>(1L))</span>
-<span id="cb53-28"><a href="#cb53-28" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(gr<span class="sc">$</span>jacobian[<span class="dv">1</span>,])</span>
-<span id="cb53-29"><a href="#cb53-29" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>(<span class="dv">1</span>))</span>
-<span id="cb53-30"><a href="#cb53-30" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb53-31"><a href="#cb53-31" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Put the pieces together:</span></span>
-<span id="cb53-32"><a href="#cb53-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">Laplace =</span> <span class="cf">function</span>() {</span>
-<span id="cb53-33"><a href="#cb53-33" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Use correct value of random effect as initial value</span></span>
-<span id="cb53-34"><a href="#cb53-34" aria-hidden="true" tabindex="-1"></a>      <span class="co"># for optimization.</span></span>
-<span id="cb53-35"><a href="#cb53-35" aria-hidden="true" tabindex="-1"></a>      x_init <span class="ot">&lt;-</span> <span class="fu">numeric</span>(<span class="at">length =</span> <span class="dv">1</span>)</span>
-<span id="cb53-36"><a href="#cb53-36" aria-hidden="true" tabindex="-1"></a>      x_init[<span class="dv">1</span>] <span class="ot">&lt;-</span> model[[RE_node]]</span>
-<span id="cb53-37"><a href="#cb53-37" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Do optimization using a conjugate gradient method</span></span>
-<span id="cb53-38"><a href="#cb53-38" aria-hidden="true" tabindex="-1"></a>      <span class="co"># that uses the AD gradient.</span></span>
-<span id="cb53-39"><a href="#cb53-39" aria-hidden="true" tabindex="-1"></a>      <span class="co"># This is a minimization of the negative log probability</span></span>
-<span id="cb53-40"><a href="#cb53-40" aria-hidden="true" tabindex="-1"></a>      optim_result <span class="ot">&lt;-</span> <span class="fu">optim</span>(<span class="at">par =</span> x_init,</span>
-<span id="cb53-41"><a href="#cb53-41" aria-hidden="true" tabindex="-1"></a>                            <span class="at">fn =</span> negLogLik, <span class="at">gr =</span> gr_negLogLik,</span>
-<span id="cb53-42"><a href="#cb53-42" aria-hidden="true" tabindex="-1"></a>                            <span class="at">method =</span> <span class="st">&quot;CG&quot;</span>)</span>
-<span id="cb53-43"><a href="#cb53-43" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Get the value at the maximum, x^*</span></span>
-<span id="cb53-44"><a href="#cb53-44" aria-hidden="true" tabindex="-1"></a>      optim_logLik <span class="ot">&lt;-</span> <span class="sc">-</span>optim_result<span class="sc">$</span>value</span>
-<span id="cb53-45"><a href="#cb53-45" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Get the second derivative at the maximum</span></span>
-<span id="cb53-46"><a href="#cb53-46" aria-hidden="true" tabindex="-1"></a>      optim_neg_hessian <span class="ot">&lt;-</span> <span class="fu">derivs_negLogLik</span>(optim_result<span class="sc">$</span>par,</span>
-<span id="cb53-47"><a href="#cb53-47" aria-hidden="true" tabindex="-1"></a>                                            <span class="at">order =</span> <span class="fu">c</span>(2L))</span>
-<span id="cb53-48"><a href="#cb53-48" aria-hidden="true" tabindex="-1"></a>      log_sigma2 <span class="ot">&lt;-</span> <span class="sc">-</span><span class="fu">log</span>(optim_neg_hessian<span class="sc">$</span>hessian[<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">1</span>])</span>
-<span id="cb53-49"><a href="#cb53-49" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Calculate the Laplace approximation</span></span>
-<span id="cb53-50"><a href="#cb53-50" aria-hidden="true" tabindex="-1"></a>      Laplace_approx <span class="ot">&lt;-</span> optim_logLik <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> log_sigma2 <span class="sc">+</span> <span class="fl">0.5</span> <span class="sc">*</span> <span class="fu">log</span>(<span class="dv">2</span><span class="sc">*</span>pi)</span>
-<span id="cb53-51"><a href="#cb53-51" aria-hidden="true" tabindex="-1"></a>      <span class="co"># Leave the model in its original state by replacing the</span></span>
-<span id="cb53-52"><a href="#cb53-52" aria-hidden="true" tabindex="-1"></a>      <span class="co"># original value and re-calculating.</span></span>
-<span id="cb53-53"><a href="#cb53-53" aria-hidden="true" tabindex="-1"></a>      model[[RE_node]] <span class="ot">&lt;&lt;-</span> x_init[<span class="dv">1</span>]</span>
-<span id="cb53-54"><a href="#cb53-54" aria-hidden="true" tabindex="-1"></a>      model<span class="sc">$</span><span class="fu">calculate</span>(calc_nodes)</span>
-<span id="cb53-55"><a href="#cb53-55" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(Laplace_approx)</span>
-<span id="cb53-56"><a href="#cb53-56" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
-<span id="cb53-57"><a href="#cb53-57" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb53-58"><a href="#cb53-58" aria-hidden="true" tabindex="-1"></a>  ),</span>
-<span id="cb53-59"><a href="#cb53-59" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;negLogLik&#39;</span></span>
-<span id="cb53-60"><a href="#cb53-60" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div id="more-about-using-ad-with-models-cont.-1" class="slide section level1">
+<h1>More about using AD with models (cont.)</h1>
+<div class="sourceCode" id="cb83"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a>nf5 <span class="ot">&lt;-</span> <span class="fu">nimbleFunction</span>(</span>
+<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">setup =</span> <span class="cf">function</span>(model) {</span>
+<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a>    calc_nodes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&#39;mu&#39;</span>, <span class="st">&#39;y&#39;</span>) <span class="co"># Normally, use model-generic programming, not hand-coded nodes</span></span>
+<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a>    constantNodes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&#39;y&#39;</span>,<span class="st">&#39;x&#39;</span>)</span>
+<span id="cb83-5"><a href="#cb83-5" aria-hidden="true" tabindex="-1"></a>    updateNodes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&#39;slope&#39;</span>,<span class="st">&#39;intercept&#39;</span>,<span class="st">&#39;sigma&#39;</span>)</span>
+<span id="cb83-6"><a href="#cb83-6" aria-hidden="true" tabindex="-1"></a>    param <span class="ot">&lt;-</span> <span class="st">&#39;slope&#39;</span></span>
+<span id="cb83-7"><a href="#cb83-7" aria-hidden="true" tabindex="-1"></a>  },</span>
+<span id="cb83-8"><a href="#cb83-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">run =</span> <span class="cf">function</span>(<span class="at">slope =</span> <span class="fu">double</span>()) {</span>
+<span id="cb83-9"><a href="#cb83-9" aria-hidden="true" tabindex="-1"></a>    temp <span class="ot">&lt;-</span> <span class="fu">numeric</span>(<span class="at">value =</span> slope, <span class="at">length =</span> <span class="dv">1</span>)</span>
+<span id="cb83-10"><a href="#cb83-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">values</span>(model, param) <span class="ot">&lt;&lt;-</span> temp <span class="co"># c(slope) makes a scalar into a vector</span></span>
+<span id="cb83-11"><a href="#cb83-11" aria-hidden="true" tabindex="-1"></a>    log_prob <span class="ot">&lt;-</span> model<span class="sc">$</span><span class="fu">calculate</span>(calc_nodes)</span>
+<span id="cb83-12"><a href="#cb83-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(log_prob)</span>
+<span id="cb83-13"><a href="#cb83-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">returnType</span>(<span class="fu">double</span>())</span>
+<span id="cb83-14"><a href="#cb83-14" aria-hidden="true" tabindex="-1"></a>  },</span>
+<span id="cb83-15"><a href="#cb83-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">methods =</span> <span class="fu">list</span>(</span>
+<span id="cb83-16"><a href="#cb83-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">derivs_run =</span> <span class="cf">function</span>(<span class="at">slope =</span> <span class="fu">double</span>(),</span>
+<span id="cb83-17"><a href="#cb83-17" aria-hidden="true" tabindex="-1"></a>                          <span class="at">reset =</span> <span class="fu">logical</span>(<span class="dv">0</span>, <span class="at">default=</span><span class="cn">FALSE</span>)) {</span>
+<span id="cb83-18"><a href="#cb83-18" aria-hidden="true" tabindex="-1"></a>      wrt <span class="ot">&lt;-</span> <span class="fu">numeric</span>(<span class="at">length =</span> <span class="dv">1</span>, <span class="at">value =</span> <span class="dv">1</span>) <span class="co"># indices, not names</span></span>
+<span id="cb83-19"><a href="#cb83-19" aria-hidden="true" tabindex="-1"></a>      ans <span class="ot">&lt;-</span> <span class="fu">derivs</span>(<span class="fu">run</span>(slope), <span class="at">wrt =</span> wrt,</span>
+<span id="cb83-20"><a href="#cb83-20" aria-hidden="true" tabindex="-1"></a>                    <span class="at">order =</span> <span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>,</span>
+<span id="cb83-21"><a href="#cb83-21" aria-hidden="true" tabindex="-1"></a>                    <span class="at">updateNodes =</span> updateNodes,</span>
+<span id="cb83-22"><a href="#cb83-22" aria-hidden="true" tabindex="-1"></a>                    <span class="at">constantNodes =</span> constantNodes,</span>
+<span id="cb83-23"><a href="#cb83-23" aria-hidden="true" tabindex="-1"></a>                    <span class="at">model =</span> model,</span>
+<span id="cb83-24"><a href="#cb83-24" aria-hidden="true" tabindex="-1"></a>                    <span class="at">reset =</span> reset)</span>
+<span id="cb83-25"><a href="#cb83-25" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(ans)</span>
+<span id="cb83-26"><a href="#cb83-26" aria-hidden="true" tabindex="-1"></a>      <span class="fu">returnType</span>(<span class="fu">ADNimbleList</span>())</span>
+<span id="cb83-27"><a href="#cb83-27" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb83-28"><a href="#cb83-28" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb83-29"><a href="#cb83-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">buildDerivs =</span> <span class="st">&#39;run&#39;</span></span>
+<span id="cb83-30"><a href="#cb83-30" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p>Notice that <code>updateNodes</code>, <code>model</code>, and
+<code>constantNodes</code> are needed for <code>derivs</code>, so
+<code>derivs_run</code> and <code>run</code> are tightly coupled
+functions.</p>
 </div>
-<div id="fourth-example-laplace-approximation-3" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Try the Laplace approximation for the first random effect.</p>
-<div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>RE_node <span class="ot">&lt;-</span> <span class="st">&quot;farm_effect[1]&quot;</span></span>
-<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>calc_nodes <span class="ot">&lt;-</span> DEmodel<span class="sc">$</span><span class="fu">getDependencies</span>(RE_node)</span>
-<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>test <span class="ot">&lt;-</span> <span class="fu">simple_1D_Laplace</span>(DEmodel, RE_node, calc_nodes)</span>
-<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>ctest <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(test, <span class="at">project =</span> C_DEmodel)</span></code></pre></div>
+<div id="more-about-using-ad-with-models-cont.-2" class="slide section level1">
+<h1>More about using AD with models (cont.)</h1>
+<div class="sourceCode" id="cb84"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>nf5obj <span class="ot">&lt;-</span> <span class="fu">nf5</span>(m)</span>
+<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>Cnf5obj <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(nf5obj, <span class="at">project =</span> m)</span></code></pre></div>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb56"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a>ctest<span class="sc">$</span><span class="fu">Laplace</span>()</span></code></pre></div>
-<pre><code>## [1] -10.92875</code></pre>
+<div class="sourceCode" id="cb86"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb86-1"><a href="#cb86-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Note current values of mu in uncompiled and compiled models</span></span>
+<span id="cb86-2"><a href="#cb86-2" aria-hidden="true" tabindex="-1"></a>m<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 5.35</code></pre>
+<div class="sourceCode" id="cb88"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a>cm<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 5.35</code></pre>
+<div class="sourceCode" id="cb90"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb90-1"><a href="#cb90-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get derivatives</span></span>
+<span id="cb90-2"><a href="#cb90-2" aria-hidden="true" tabindex="-1"></a>nf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.7</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -1.603182
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -17.10816
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb92"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb92-1"><a href="#cb92-1" aria-hidden="true" tabindex="-1"></a>Cnf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.7</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -1.603182
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -17.10816
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb94"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb94-1"><a href="#cb94-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Note that values of mu were updated</span></span>
+<span id="cb94-2"><a href="#cb94-2" aria-hidden="true" tabindex="-1"></a>m<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 7.01</code></pre>
+<div class="sourceCode" id="cb96"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb96-1"><a href="#cb96-1" aria-hidden="true" tabindex="-1"></a>cm<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 7.01</code></pre>
+<div class="sourceCode" id="cb98"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb98-1"><a href="#cb98-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get derivatives with new slope, after changing sigma</span></span>
+<span id="cb98-2"><a href="#cb98-2" aria-hidden="true" tabindex="-1"></a>m<span class="sc">$</span>sigma <span class="ot">&lt;-</span> <span class="fl">0.3</span></span>
+<span id="cb98-3"><a href="#cb98-3" aria-hidden="true" tabindex="-1"></a>cm<span class="sc">$</span>sigma <span class="ot">&lt;-</span> <span class="fl">0.3</span></span>
+<span id="cb98-4"><a href="#cb98-4" aria-hidden="true" tabindex="-1"></a>nf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.8</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb100"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb100-1"><a href="#cb100-1" aria-hidden="true" tabindex="-1"></a>Cnf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.8</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb102"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb102-1"><a href="#cb102-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Note that values of mu were updated</span></span>
+<span id="cb102-2"><a href="#cb102-2" aria-hidden="true" tabindex="-1"></a>m<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 7.84</code></pre>
+<div class="sourceCode" id="cb104"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb104-1"><a href="#cb104-1" aria-hidden="true" tabindex="-1"></a>cm<span class="sc">$</span>mu</span></code></pre></div>
+<pre><code>## [1] 7.84</code></pre>
+<div class="sourceCode" id="cb106"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb106-1"><a href="#cb106-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Change a constantNode&#39;s value: </span><span class="al">DANGER</span><span class="co">!</span></span>
+<span id="cb106-2"><a href="#cb106-2" aria-hidden="true" tabindex="-1"></a>m<span class="sc">$</span>y <span class="ot">&lt;-</span> <span class="dv">9</span></span>
+<span id="cb106-3"><a href="#cb106-3" aria-hidden="true" tabindex="-1"></a>cm<span class="sc">$</span>y <span class="ot">&lt;-</span> <span class="dv">9</span></span>
+<span id="cb106-4"><a href="#cb106-4" aria-hidden="true" tabindex="-1"></a>nf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.8</span>)</span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -7.190521
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 106.9778
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb108"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb108-1"><a href="#cb108-1" aria-hidden="true" tabindex="-1"></a>Cnf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.8</span>) <span class="co"># ERROR: old value of y is baked into tape</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<div class="sourceCode" id="cb110"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb110-1"><a href="#cb110-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Reset the tape to bake in the new values of constantNodes</span></span>
+<span id="cb110-2"><a href="#cb110-2" aria-hidden="true" tabindex="-1"></a>Cnf5obj<span class="sc">$</span><span class="fu">derivs_run</span>(<span class="at">slope=</span><span class="fl">0.8</span>, <span class="at">reset=</span><span class="cn">TRUE</span>) <span class="co"># CORRECT</span></span></code></pre></div>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -7.190521
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 106.9778
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-4" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>What is missing from this simple example?</p>
-<ul>
-<li>We want determination of random effects nodes and calculation nodes
-to be automatic (but customizable).</li>
-<li>We need to handle scalar or vector random effects.</li>
-<li>We need to maximize the Laplace approximation with respect to the
-model parameters. This is a complicated problem because the gradient of
-the Laplace approximation involves third derivatives.</li>
-<li>We can consider various ways to arrange the different derivatives
-for efficiency using double-taping schemes.</li>
-<li>We can avoid recalculating the value when obtaining the
-gradient.</li>
-<li>We need various error trapping and robustness checks.</li>
-<li>We need to handle parameters and/or random effects that have
-constraints on valid values (e.g. variance &gt; 0).</li>
-</ul>
-<p>The full-blown Laplace approximation with all of these features is in
-the AD version of <code>nimble</code>.</p>
-<ul>
-<li>Future work may include different choices of optimization
-methods.</li>
-</ul>
+<div id="using-ad-in-user-defined-functions-and-distributions" class="slide section level1">
+<h1>Using AD in user-defined functions and distributions</h1>
+<p>Simply add <code>buildDerivs=TRUE</code> to the
+<code>nimbleFunction</code> for the user-defined function or
+distribution.</p>
+<p>(Or
+<code>buildDerivs = list(run = list(ignore = c(&#39;param1&#39;,&#39;param2&#39;)))</code>
+to leave <code>param1</code> and <code>param2</code> out of derivative
+tracking.)</p>
 </div>
-<div id="fourth-example-laplace-approximation-skip-this-slide" class="slide section level1">
-<h1>Fourth example: Laplace approximation (Skip this slide)</h1>
-<p>This slide shows use of the fully built Laplace approximation to
-check the demonstration code above. We don’t need to go through it.</p>
-<div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>param_nodes <span class="ot">&lt;-</span> DEmodel<span class="sc">$</span><span class="fu">getNodeNames</span>(<span class="at">topOnly =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>DE_Laplace <span class="ot">&lt;-</span> <span class="fu">buildLaplace</span>(DEmodel, <span class="at">paramNodes =</span> param_nodes,</span>
-<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">randomEffectsNodes =</span> RE_node,</span>
-<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>                           <span class="at">calcNodes =</span> calc_nodes)</span></code></pre></div>
-<pre><code>## Warning in buildLaplace(DEmodel, paramNodes = param_nodes, randomEffectsNodes = RE_node, : There are some random effects (latent states) in the model that look
-## like they should be included in randomEffectsNodes for Laplace approximation
-## for the provided (or default) paramNodes:
-## farm_effect[2], , farm_effect[3], , farm_effect[4], , farm_effect[5],  ...
-## To silence this warning, include &#39;warn = FALSE&#39; in
-## the control list.</code></pre>
-<div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(DE_Laplace, <span class="at">project =</span> DEmodel)</span></code></pre></div>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>param_values <span class="ot">&lt;-</span> <span class="fu">values</span>(C_DEmodel, param_nodes)</span>
-<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace<span class="sc">$</span><span class="fu">Laplace</span>(param_values)</span></code></pre></div>
-<pre><code>## [1] -10.92875</code></pre>
-<div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="co"># See which parameters these correspond to:</span></span>
-<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>param_nodes</span></code></pre></div>
-<pre><code>## [1] &quot;sex_int[1]&quot;     &quot;sex_int[2]&quot;     &quot;length_coef[1]&quot; &quot;length_coef[2]&quot;
-## [5] &quot;farm_sd&quot;</code></pre>
+<div id="using-makederivsinfo-to-determine-constantnodes-and-updatenodes" class="slide section level1">
+<h1>Using <code>makeDerivsInfo</code> to determine
+<code>constantNodes</code> and <code>updateNodes</code></h1>
+<p>TBD</p>
 </div>
-<div id="fourth-example-laplace-approximation-5" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Use the fully built Laplace approximation, handling all the random
-effects and maximizing the Laplace-approximated log likelihood.</p>
-<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>DE_Laplace <span class="ot">&lt;-</span> <span class="fu">buildLaplace</span>(DEmodel)</span>
-<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace <span class="ot">&lt;-</span> <span class="fu">compileNimble</span>(DE_Laplace, <span class="at">project =</span> DEmodel)</span></code></pre></div>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<div class="sourceCode" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>LaplaceMLE <span class="ot">&lt;-</span> C_DE_Laplace<span class="sc">$</span><span class="fu">LaplaceMLE</span>()</span></code></pre></div>
-<pre><code>## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation</code></pre>
-<pre><code>## Warning in C_DE_Laplace$LaplaceMLE(): Hessian computation is not implemented</code></pre>
-<div class="sourceCode" id="cb71"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>C_DE_Laplace<span class="sc">$</span><span class="fu">inverseTransform</span>(LaplaceMLE<span class="sc">$</span>par)</span></code></pre></div>
-<pre><code>## [1] 0.93958594 1.56417418 0.03897847 0.07483991 1.54687755</code></pre>
-<p>Notice the <code>inverseTransform</code> step. We will likely change
-this behavior in the future so that LaplaceMLE returns the
-inverse-transformed parameters.</p>
-</div>
-<div id="fourth-example-laplace-approximation-6" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Since this is a GLMM, we can compare to a specialized implementation
-of Laplace approximation. We’ll use <code>lme4</code>.</p>
-<div class="sourceCode" id="cb73"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lme4)</span></code></pre></div>
-<pre><code>## Loading required package: Matrix</code></pre>
-<div class="sourceCode" id="cb75"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a>lme4_fit <span class="ot">&lt;-</span> <span class="fu">glmer</span>(Ecervi_01 <span class="sc">~</span> ctrLength<span class="sc">*</span>fSex <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> fFarm), <span class="at">family =</span> binomial, <span class="at">data =</span> DeerEcervi)</span>
-<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(lme4_fit)</span></code></pre></div>
-<pre><code>## Generalized linear mixed model fit by maximum likelihood (Laplace
-##   Approximation) [glmerMod]
-##  Family: binomial  ( logit )
-## Formula: Ecervi_01 ~ ctrLength * fSex + (1 | fFarm)
-##    Data: DeerEcervi
-## 
-##      AIC      BIC   logLik deviance df.resid 
-##    832.6    856.1   -411.3    822.6      821 
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -6.2678 -0.6090  0.2809  0.5022  3.4546 
-## 
-## Random effects:
-##  Groups Name        Variance Std.Dev.
-##  fFarm  (Intercept) 2.391    1.546   
-## Number of obs: 826, groups:  fFarm, 24
-## 
-## Fixed effects:
-##                 Estimate Std. Error z value Pr(&gt;|z|)    
-## (Intercept)     0.938969   0.356001   2.638  0.00835 ** 
-## ctrLength       0.038964   0.006917   5.633 1.77e-08 ***
-## fSex2           0.624487   0.222938   2.801  0.00509 ** 
-## ctrLength:fSex2 0.035859   0.011409   3.143  0.00167 ** 
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-## Correlation of Fixed Effects:
-##             (Intr) ctrLng fSex2 
-## ctrLength   -0.107              
-## fSex2       -0.189  0.238       
-## ctrLngth:S2  0.091 -0.514  0.232</code></pre>
-</div>
-<div id="fourth-example-laplace-approximation-7" class="slide section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>How do the parameters match between <code>nimble</code> and
-<code>lme4</code> results?</p>
-<p><code>lme4</code> is using treatment contrasts (Sex1 is the
-“reference” group and Sex2 parameters are differences from Sex1).</p>
-<ul>
-<li>First parameter from <code>nimble</code> is the Sex1 intercept,
-which is the <code>(Intercept)</code> from <code>lme4</code>.</li>
-<li>Second parameter from <code>nimble</code> is the Sex2 intercept,
-which is <code>(Intercept)</code> + <code>fSex2</code> from
-<code>lme4</code>.</li>
-<li>Third parameter from <code>nimble</code> is the Sex1 coefficient for
-<code>ctrLength</code>.</li>
-<li>Fourth parameter from <code>nimble</code> is the Sex2 coefficient
-for <code>ctrLength</code>, which is <code>ctrLength</code> +
-<code>ctrLength:fSex2</code> from <code>lme4</code>.</li>
-<li>Fifth parameter from <code>nimble</code> is the farm-effect standard
-deviation.</li>
-</ul>
+<div id="generic-parameter-transformations" class="slide section level1">
+<h1>Generic parameter transformations</h1>
+<p>It is often useful to let algorithms operate on unconstrained
+parameter spaces. E.g. most optimization algorithms don’t handle
+parameter boundaries well (or at all). HMC would have problems with
+parameter boundaries.</p>
+<p>In the AD beta-release, we provide a generic parameter transformation
+system. It is motivated by AD use cases and supports derivative
+tracking, but it can be used for any purpose.</p>
+<p>To be continued…</p>
 </div>
 
   <!-- dynamically load mathjax for compatibility with self-contained -->

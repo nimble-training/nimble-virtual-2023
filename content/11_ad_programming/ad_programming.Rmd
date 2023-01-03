@@ -6,6 +6,11 @@ date: "January 2023"
 output:
   slidy_presentation: default
   beamer_presentation: default
+pandoc_args:
+  colorlinks: true
+  linkcolor: red
+  urlcolor: red
+
 ---
 <style>
 slides > slide {
@@ -16,9 +21,343 @@ slides > slide {
 
 ```{r setup, include=FALSE}
 library(nimble)
-source(file.path("..", "examples", "DeerEcervi", "load_DeerEcervi.R"), 
-       chdir = TRUE)
+#source(file.path("..", "examples", "DeerEcervi", "load_DeerEcervi.R"), 
+#       chdir = TRUE)
+eval <- TRUE
 ```
 
-# Overview
+# Advanced uses of AD in nimble
 
+- What variables and/or steps get "baked in" to AD tapes
+- `reset` argument to `derivs` (aka `nimDerivs`)
+- Holding variables out of AD tracking.
+- Understanding `if`-`then`-`else` and `for`-loops in AD
+- More about using AD with models
+- Using AD in user-defined functions and distributions
+- Generic parameter transformations
+- Double-taping for potential efficiency
+
+# When values are "baked in" to AD tapes
+
+If a variable is not subject to derivative-tracking, its value will enter the AD tape during recording and can't be changed until the tape is reset.
+
+Example: `y = exp(c * x^2)` where `c` will not be tracked for derivatives.
+
+```{r, eval=eval}
+nf1 <- nimbleFunction(
+  # Setup argument c will become member data of a C++ class.
+  # It will not have derivative-tracking.
+  setup = function(c) {},
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(c * x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double()) {
+      d <- derivs(foo(x), wrt = "x", order = 0:1)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'foo'
+)
+```
+
+# When values are "baked in" to AD tapes (cont.)
+
+```{r, eval=eval}
+nf1obj <- nf1(0.1) # c = 0.1
+Cnf1obj <- compileNimble(nf1obj)
+# Compare compiled and uncompiled
+nf1obj$derivs_foo(3.)
+Cnf1obj$derivs_foo(3.)
+# Always test with an input not used for recording the tape
+nf1obj$derivs_foo(2.5)
+Cnf1obj$derivs_foo(2.5)
+# Change the value of c
+nf1obj$c <- 0.2
+Cnf1obj$c <- 0.2
+# Compare compiled and uncompiled
+nf1obj$derivs_foo(2.5)
+Cnf1obj$derivs_foo(2.5) # WRONG!!!
+```
+
+The last `Cnf1obj$derivs_foo(2.5)` gives the **wrong answer** because the tape has `c = 0.1` baked in.
+
+# How to reset tapes with new baked-in values
+
+```{r, eval=eval}
+nf2 <- nimbleFunction(
+  setup = function(c) {},
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(c * x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          reset = logical(0, default = FALSE)) {
+      d <- derivs(foo(x), wrt = "x", order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'foo'
+)
+```
+
+# How to reset tapes with new baked-in values (cont.)
+
+```{r, eval=eval}
+nf2obj <- nf2(0.1) # c = 0.1
+Cnf2obj <- compileNimble(nf2obj)
+# Compare compiled and uncompiled
+nf2obj$derivs_foo(3.)
+Cnf2obj$derivs_foo(3.)
+# Test with an input not used for recording the tape
+nf2obj$derivs_foo(2.5)
+Cnf2obj$derivs_foo(2.5)
+# Change the value of c
+nf2obj$c <- 0.2
+Cnf2obj$c <- 0.2
+# Compare compiled and uncompiled
+nf2obj$derivs_foo(3.)
+Cnf2obj$derivs_foo(3., reset=TRUE) # Record a new tape
+# Test with an input not used for recording the tape
+nf2obj$derivs_foo(2.5)
+Cnf2obj$derivs_foo(2.5) ## CORRECT
+```
+
+# Holding variables out of AD tracking 
+
+We may want to include `c` as an argument but gain efficiency by never tracking derivatives through it if we don't need to.
+
+```{r, eval=eval}
+nf3 <- nimbleFunction(
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double(),
+                   c1 = double(),    # Below we say to ignore c1
+                   c2 = integer()) { # Integers never have derivatives tracked
+      return(exp(c1 * c2 * x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          c1 = double(),
+                          c2 = integer(),
+                          reset = logical(0, default = FALSE)) {
+      d <- derivs(foo(x, c1, c2), wrt = "x", order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = list(foo = list(ignore = "c1"))
+)
+```
+
+# Holding variables out of AD tracking (cont)
+
+```{r, eval=eval}
+nf3obj <- nf3()
+Cnf3obj <- compileNimble(nf3obj)
+# Compare compiled and uncompiled
+nf3obj$derivs_foo(3.,  0.05, 2)
+Cnf3obj$derivs_foo(3., 0.05, 2)
+# Test with an input not used for recording the tape
+nf3obj$derivs_foo(2.5, 0.05, 2)
+Cnf3obj$derivs_foo(2.5, 0.05, 2)
+# Use new values of c1 and/or c2:
+nf3obj$derivs_foo(2.5, 0.1, 2)
+Cnf3obj$derivs_foo(2.5, 0.1, 2) # ERROR: old values of c1 and c2 are in the tape
+Cnf3obj$derivs_foo(3., 0.1, 2, reset=TRUE) # Record a new tape (with any value of x)
+Cnf3obj$derivs_foo(2.5, 0.1, 2) # CORRECT: with c1=.1 and c2 = 2
+```
+
+# Understanding `if`-`then`-`else` and `for`-loops in AD
+
+Any conditional branching or looping is baked into the tape (aka "unrolled" in the tape).
+
+Here is a strange way to calculate either $x^p$ or $(0.5 x)^p$.
+
+```{r, eval=eval}
+nf4 <- nimbleFunction(
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double(),
+                   p = double(),
+                   half = logical()) { # Will be an integer, but say I use double()
+      if(!half) {
+        ans <- x
+        for(i in 1:p) {
+          ans <- ans*x
+        }  
+      } else {
+        ans <- 0.5*x
+        for(i in 1:p) {
+          ans <- ans*(0.5*x)
+        }
+      }
+      return(ans)
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          p = double(),
+                          half = logical(),
+                          reset = logical(0, default = FALSE)) {
+      d <- derivs(foo(x, p, half), wrt = "x", order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList()) 
+    }
+  ),
+  buildDerivs = list(foo = list(ignore = c('p','i'))) # Necessary to avoid an error
+)
+```
+
+# Understanding `if`-`then`-`else` and `for`-loops in AD (cont.)
+
+```{r, eval=eval}
+nf4obj <- nf4()
+Cnf4obj <- compileNimble(nf4obj)
+# Compare compiled and uncompiled
+nf4obj$derivs_foo(1.5, 3, FALSE)
+Cnf4obj$derivs_foo(1.5, 3, FALSE)
+# Test with an input not used for recording the tape
+nf4obj$derivs_foo(2.5, 3, FALSE)
+Cnf4obj$derivs_foo(2.5, 3, FALSE)
+# Use new values of p and/or half:
+nf4obj$derivs_foo(2.5, 4, TRUE)
+Cnf4obj$derivs_foo(2.5, 4, TRUE) # ERROR: old values of p and half are used
+Cnf4obj$derivs_foo(1.5, 4, TRUE, reset=TRUE) # Record a new tape (with any value of x)
+Cnf4obj$derivs_foo(2.5, 4, TRUE) # CORRECT: with p=4 and half=TRUE
+```
+
+# More about using AD with models
+
+- When recording a tape using a model, all values that will be used need to be copied (internally) from the regular model to the AD model.  You  need to provide information about which nodes are needed, in two categories: `constantNodes` (not the same as `constants` in `nimbleModel`) and `updateNodes`.
+- When using a tape recorded with a model, one can update values that might have changed (without resetting the tape).
+
+Let's look at an example (simple model used earlier):
+
+```{r, eval=FALSE}
+model_code <- nimbleCode({
+  y ~ dnorm(mean = mu, sd = sigma)
+  mu <- intercept + slope * x
+  intercept ~ dnorm(0, sd = 1000)
+  sigma ~ dunif(0, 10)
+})
+```
+
+- Say `y` is data.
+- `model$calculate('y')` returns the log probability density of `y`.
+- `model$calculate(c('mu','y'))` calculates `mu` and then returns the log probability density of `y`.
+- Say we will want derivative(s) of `model$calculate('mu', 'y')` with respect to `slope`.
+- Values needed: `y`, `intercept`, `slope`, `x`, and `sigma`.
+- Values that might **not** change between derivative calls: `y`, `x`.  These are **constantNodes**.
+- Values that might change between derivative calls: `intercept`, `slope`, `sigma`. These are **updateNodes**.
+
+# More about using AD with models (cont.)
+
+Build the example model:
+
+```{r, eval=eval}
+model_code <- nimbleCode({
+  y ~ dnorm(mean = mu, sd = sigma)
+  mu <- intercept + slope * x
+  intercept ~ dnorm(0, sd = 1000)
+  sigma ~ dunif(0, 10)
+})
+m <- nimbleModel(model_code,
+                 inits = list(intercept = 1.2, slope = 0.5,
+                              sigma = 0.7),
+                 data = list(y = 6, x = 8.3), # Notice I put x as data, not constants
+                 buildDerivs = TRUE,
+                 )
+cm <- compileNimble(m)
+```
+
+Scalar constants are baked into a model and do not exist as nodes, so I made `x` be data for illustration.
+
+# More about using AD with models (cont.)
+
+```{r, eval=eval}
+nf5 <- nimbleFunction(
+  setup = function(model) {
+    calc_nodes <- c('mu', 'y') # Normally, use model-generic programming, not hand-coded nodes
+    constantNodes <- c('y','x')
+    updateNodes <- c('slope','intercept','sigma')
+    param <- 'slope'
+  },
+  run = function(slope = double()) {
+    temp <- numeric(value = slope, length = 1)
+    values(model, param) <<- temp # c(slope) makes a scalar into a vector
+    log_prob <- model$calculate(calc_nodes)
+    return(log_prob)
+    returnType(double())
+  },
+  methods = list(
+    derivs_run = function(slope = double(),
+                          reset = logical(0, default=FALSE)) {
+      wrt <- numeric(length = 1, value = 1) # indices, not names
+      ans <- derivs(run(slope), wrt = wrt,
+                    order = 0:1,
+                    updateNodes = updateNodes,
+                    constantNodes = constantNodes,
+                    model = model,
+                    reset = reset)
+      return(ans)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'run'
+)
+```
+
+Notice that `updateNodes`, `model`, and `constantNodes` are needed for `derivs`, so `derivs_run` and `run` are tightly coupled functions. 
+
+# More about using AD with models (cont.)
+
+```{r, eval=eval}
+nf5obj <- nf5(m)
+Cnf5obj <- compileNimble(nf5obj, project = m)
+# Note current values of mu in uncompiled and compiled models
+m$mu
+cm$mu
+# Get derivatives
+nf5obj$derivs_run(slope=0.7)
+Cnf5obj$derivs_run(slope=0.7)
+# Note that values of mu were updated
+m$mu
+cm$mu
+# Get derivatives with new slope, after changing sigma
+m$sigma <- 0.3
+cm$sigma <- 0.3
+nf5obj$derivs_run(slope=0.8)
+Cnf5obj$derivs_run(slope=0.8)
+# Note that values of mu were updated
+m$mu
+cm$mu
+# Change a constantNode's value: DANGER!
+m$y <- 9
+cm$y <- 9
+nf5obj$derivs_run(slope=0.8)
+Cnf5obj$derivs_run(slope=0.8) # ERROR: old value of y is baked into tape
+# Reset the tape to bake in the new values of constantNodes
+Cnf5obj$derivs_run(slope=0.8, reset=TRUE) # CORRECT
+```
+
+# Using AD in user-defined functions and distributions
+
+Simply add `buildDerivs=TRUE` to the `nimbleFunction` for the user-defined function or distribution.
+
+(Or `buildDerivs = list(run = list(ignore = c('param1','param2')))` to leave `param1` and `param2` out of derivative tracking.)
+
+# Using `makeDerivsInfo` to determine `constantNodes` and `updateNodes`
+
+TBD
+
+# Generic parameter transformations
+
+It is often useful to let algorithms operate on unconstrained parameter spaces. E.g. most optimization algorithms don't handle parameter boundaries well (or at all).  HMC would have problems with parameter boundaries.
+
+In the AD beta-release, we provide a generic parameter transformation system.  It is motivated by AD use cases and supports derivative tracking, but it can be used for any purpose.
+
+To be continued...

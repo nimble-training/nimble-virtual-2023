@@ -12,7 +12,7 @@
 <meta name="author" content="NIMBLE Development Team" />
 
 
-<title>Introduction to automatic differentiation, including Laplace approximation</title>
+<title>Programming with automatic differentiation</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -362,8 +362,8 @@ pre code {
 
 
 
-<h1 class="title toc-ignore">Introduction to automatic differentiation,
-including Laplace approximation</h1>
+<h1 class="title toc-ignore">Programming with automatic
+differentiation</h1>
 <h3 class="subtitle">NIMBLE 2023 Virtual Workshop</h3>
 <h4 class="author">NIMBLE Development Team</h4>
 <h4 class="date">January 2023</h4>
@@ -377,160 +377,39 @@ slides > slide {
   overflow-y: auto !important;
 }
 </style>
-<div id="why-derivatives" class="section level1">
-<h1>Why derivatives?</h1>
-<p>Many algorithms require derivatives to work or work well.</p>
+<div id="advanced-uses-of-ad-in-nimble" class="section level1">
+<h1>Advanced uses of AD in nimble</h1>
 <ul>
-<li><p>Finding function maximum or minimum (aka optimization)</p></li>
-<li><p>Hamiltonian Monte Carlo (HMC; a kind of MCMC sampler)</p></li>
-<li><p>Other kinds of MCMC samplers, e.g. Langevin.</p></li>
-<li><p>Laplace approximation</p>
-<ul>
-<li>Starts with an optimization.</li>
-<li>Then requires matrix of second derivatives (Hessian)</li>
-</ul></li>
-<li><p>Adaptive Gaussian quadrature (builds upon Laplace
-approx.)</p></li>
+<li>What variables and/or steps get “baked in” to AD tapes</li>
+<li><code>reset</code> argument to <code>derivs</code> (aka
+<code>nimDerivs</code>)</li>
+<li>Holding variables out of AD tracking.</li>
+<li>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD</li>
+<li>More about using AD with models</li>
+<li>Using AD in user-defined functions and distributions</li>
+<li>Generic parameter transformations</li>
+<li>Double-taping for potential efficiency</li>
 </ul>
 </div>
-<div id="how-do-computers-get-derivatives" class="section level1">
-<h1>How do computers get derivatives?</h1>
-<p>Example function:</p>
-<ul>
-<li><span class="math inline">\(y = e^{x^2}\)</span>.</li>
-<li><span class="math inline">\(\frac{dy}{dx} = 2x e^{x^{2}} =
-2xy\)</span>.</li>
-</ul>
-<p>Derivative methods:</p>
-<ol style="list-style-type: decimal">
-<li>Hard-coded analytic function: Developer codes
-<code>2 * x * exp(x^2)</code></li>
-<li>Symbolic algebra: Code processes <code>exp(x^2)</code> into
-<code>2 * x * exp(x^2)</code></li>
-<li>Finite-element approximation: <span class="math inline">\(\frac{dy}{dx} \approx \frac{e^{(x+\delta)^{2}} -
-e^{{x^{2}}}}{\delta}\)</span>, for some small value of <span class="math inline">\(\delta\)</span> (hard to choose in general). Code
-calls function once with input <span class="math inline">\(x\)</span>
-and once with input <span class="math inline">\(x+\delta\)</span>.</li>
-<li><strong>Automatic (or “Algorithmic”) Differentiation:</strong>:
-Carry derivative information through all math operators,
-i.e. <code>^</code> and <code>exp</code> in <span class="math inline">\(e^{{x^{2}}} =\)</span> <code>exp(x^2)</code>.</li>
-</ol>
-</div>
-<div id="automatic-differentiation-ad" class="section level1">
-<h1>Automatic Differentiation (AD)</h1>
-<p>Steps to compute <span class="math inline">\(y = e^{x^2}\)</span>
-(<strong>value</strong>) for x = 3.0:</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(x^{2} = 3^2 \rightarrow 9\)</span>.</li>
-<li><span class="math inline">\(e^{x^{2}} = e^9 \rightarrow
-8103.1\)</span>.</li>
-</ol>
-<p>Steps to compute <span class="math inline">\(\frac{dy}{dx}\)</span>
-(using chain rule): <em>Forward mode</em>, i.e. inner derivatives
-first.</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(\frac{d(x^{2})}{dx} = 2x = 2 \times 3
-\rightarrow 6\)</span>.</li>
-<li><span class="math inline">\(\frac{d(e^{x^2})}{dx} =
-\frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = e^{9} \times 6
-= 8103.1 \times 6 \rightarrow 48618.6\)</span>.</li>
-</ol>
-<p>Steps to compute <span class="math inline">\(\frac{dy}{dx}\)</span>
-(using chain rule): <em>Reverse mode</em>, i.e. outer derivatives
-first.</p>
-<ol style="list-style-type: decimal">
-<li><span class="math inline">\(\frac{d(e^{x^2})}{d(x^{2})} = e^9
-\rightarrow 8103.1\)</span>.</li>
-<li><span class="math inline">\(\frac{d(e^{x^2})}{dx} =
-\frac{d(e^{x^2})}{d(x^{2})} \times \frac{d(x^{2})}{dx} = 8103.1 \times
-2x = 8103.1 \times 6 \rightarrow 48618.6\)</span></li>
-</ol>
-</div>
-<div id="some-general-points-about-ad" class="section level1">
-<h1>Some general points about AD</h1>
-<ul>
-<li>AD works by stepping through the same sequence of operations
-multiple times, tracking different information each time.</li>
-<li>AD can sometimes be <em>more efficient</em> than using the
-derivative equations explicitly. E.g. <span class="math inline">\(e^{9}
-= 8103.1\)</span> was calculated and can be re-used.</li>
-<li>AD can be iterated to obtain arbitrary-order derivatives.
-Lower-order derivatives must be done before higher-order
-derivatives.</li>
-<li>Forward and reverse modes are each more efficient for different
-kinds of problems, depending on number of inputs and outputs (details
-not discussed here).</li>
-<li>Operations such as matrix multiplication, matrix inversion, matrix
-solving or others can be implemented with matrix AD operations (rather
-than relying on potentially long sequences of scalar operations, which
-can be slow for AD).</li>
-</ul>
-</div>
-<div id="nimble-adopts-the-cppad-c-library-for-ad" class="section level1">
-<h1>NIMBLE adopts the CppAD C++ library for AD</h1>
-<ul>
-<li>Huge credit to <a href="https://coin-or.github.io/CppAD/html/CppAD.html"><span style="color:blue">CppAD</span></a>.</li>
-<li>Written by Brad Bell at the University of Washington.</li>
-<li>CppAD is also used by Template Model Builder (TMB).</li>
-<li>CppAD is general and efficient.</li>
-<li>We have written some specialized handling for some cases (“atomic”
-operators, in CppAD terminology).</li>
-<li>CppAD can trace derivatives through arbitrary function calls.</li>
-<li>NIMBLE’s use of CppAD involves deep changes in everything, not just
-calling a few extra functions.</li>
-<li>NIMBLE with CppAD can give derivatives of arbitrary model
-calculations and/or nimbleFunction calculations.</li>
-<li>Care is required for any conditional steps in functions, such as
-if-then-else or for-loops. Normally, conditional branching and looping
-is “baked in” to AD calculations. This is discussed more later.</li>
-</ul>
-</div>
-<div id="some-terminology-for-ad-in-nimble-adapted-from-cppad" class="section level1">
-<h1>Some terminology for AD in NIMBLE (adapted from CppAD)</h1>
-<ul>
-<li><p>Orders 0, 1, and 2 are called “Value”, “Jacobian” (or
-“Gradient”), and “Hessian”, respectively.</p></li>
-<li><p>We say that operations are <em>recorded</em> onto a
-<em>tape</em>, which is replayed to obtain values (0th order) and/or
-derivatives (1st and 2nd order).</p></li>
-<li><p>We can take <em>derivatives of derivatives</em>. This involves
-making a <em>tape of the replaying of a tape</em>.</p>
-<ul>
-<li>We call this <strong>double-taping</strong> or
-<strong>meta-taping</strong>.</li>
-</ul></li>
-<li><p>Double-taping can improve efficiency.</p></li>
-<li><p>Double-taping can give derivatives of order &gt; 2.</p></li>
-</ul>
-</div>
-<div id="status-of-ad-in-nimble" class="section level1">
-<h1>Status of AD in NIMBLE</h1>
-<ul>
-<li>Use of AD features are “opt-in”, so by default everything should
-work normally, i.e. without AD.</li>
-<li>We made a <a href="https://r-nimble.org/ad-beta">“beta release” or
-“release candidate”</a> in summer 2022.</li>
-<li>We plan to release AD in a regular version of <code>nimble</code>
-soon.</li>
-<li>A draft chapter of our User Manual on AD is <a href="https://r-nimble.org/ADuserManual_draft/chapter_AD.html">here</a>.</li>
-<li>Laplace approximation is currently planned to be included in
-<code>nimble</code> with AD.</li>
-<li>Hamiltonian Monte Carlo (HMC) samplers will be in the separate
-package <a href="https://github.com/nimble-dev/nimbleHMC"><code>nimbleHMC</code></a>,
-which is also available now as a beta release.</li>
-</ul>
-</div>
-<div id="first-example-derivatives-in-a-nimblefunction" class="section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
+<div id="when-values-are-baked-in-to-ad-tapes" class="section level1">
+<h1>When values are “baked in” to AD tapes</h1>
+<p>If a variable is not subject to derivative-tracking, its value will
+enter the AD tape during recording and can’t be changed until the tape
+is reset.</p>
+<p>Example: <code>y = exp(c * x^2)</code> where <code>c</code> will not
+be tracked for derivatives.</p>
 <pre class="r"><code>nf1 &lt;- nimbleFunction(
-  setup = TRUE,
+  # Setup argument c will become member data of a C++ class.
+  # It will not have derivative-tracking.
+  setup = function(c) {},
   methods = list(
     foo = function(x = double()) {
-      return(exp(x^2))
+      return(exp(c * x^2))
       returnType(double())
     },
     derivs_foo = function(x=double()) {
-      d &lt;- derivs(foo(x), wrt = &quot;x&quot;, order = 0:2)
+      d &lt;- derivs(foo(x), wrt = &quot;x&quot;, order = 0:1)
       return(d)
       returnType(ADNimbleList())
     }
@@ -538,71 +417,485 @@ which is also available now as a beta release.</li>
   buildDerivs = &#39;foo&#39;
 )</code></pre>
 </div>
-<div id="first-example-derivatives-in-a-nimblefunction-1" class="section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
-<p>Make an object (instance) of nf1:</p>
-<pre class="r"><code>nf1obj &lt;- nf1()</code></pre>
-<p>Uncompiled execution:</p>
-<pre class="r"><code>nf1obj$derivs_foo(3)</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] 8103.084
-## Field &quot;jacobian&quot;:
-##         [,1]
-## [1,] 48618.5
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##          [,1]
-## [1,] 307917.2</code></pre>
-<pre class="r"><code>nf1obj$foo(3) # for comparison of value</code></pre>
-<pre><code>## [1] 8103.084</code></pre>
-</div>
-<div id="first-example-derivatives-in-a-nimblefunction-2" class="section level1">
-<h1>First example: Derivatives in a nimbleFunction</h1>
-<p>Compiled execution:</p>
-<pre class="r"><code>cnf1obj &lt;- compileNimble(nf1obj)</code></pre>
+<div id="when-values-are-baked-in-to-ad-tapes-cont." class="section level1">
+<h1>When values are “baked in” to AD tapes (cont.)</h1>
+<pre class="r"><code>nf1obj &lt;- nf1(0.1) # c = 0.1
+Cnf1obj &lt;- compileNimble(nf1obj)</code></pre>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>cnf1obj$derivs_foo(3)</code></pre>
+<pre class="r"><code># Compare compiled and uncompiled
+nf1obj$derivs_foo(3.)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 8103.084
+## [1] 2.459603
 ## Field &quot;jacobian&quot;:
-##         [,1]
-## [1,] 48618.5
-## Field &quot;hessian&quot;:
-## , , 1
-## 
 ##          [,1]
-## [1,] 307917.2</code></pre>
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf1obj$derivs_foo(3.)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Always test with an input not used for recording the tape
+nf1obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf1obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Change the value of c
+nf1obj$c &lt;- 0.2
+Cnf1obj$c &lt;- 0.2
+# Compare compiled and uncompiled
+nf1obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf1obj$derivs_foo(2.5) # WRONG!!!</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<p>The last <code>Cnf1obj$derivs_foo(2.5)</code> gives the <strong>wrong
+answer</strong> because the tape has <code>c = 0.1</code> baked in.</p>
 </div>
-<div id="understanding-derivative-outputs" class="section level1">
-<h1>Understanding derivative outputs:</h1>
+<div id="how-to-reset-tapes-with-new-baked-in-values" class="section level1">
+<h1>How to reset tapes with new baked-in values</h1>
+<pre class="r"><code>nf2 &lt;- nimbleFunction(
+  setup = function(c) {},
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(c * x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          reset = logical(0, default = FALSE)) {
+      d &lt;- derivs(foo(x), wrt = &quot;x&quot;, order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = &#39;foo&#39;
+)</code></pre>
+</div>
+<div id="how-to-reset-tapes-with-new-baked-in-values-cont." class="section level1">
+<h1>How to reset tapes with new baked-in values (cont.)</h1>
+<pre class="r"><code>nf2obj &lt;- nf2(0.1) # c = 0.1
+Cnf2obj &lt;- compileNimble(nf2obj)</code></pre>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<pre class="r"><code># Compare compiled and uncompiled
+nf2obj$derivs_foo(3.)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf2obj$derivs_foo(3.)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Test with an input not used for recording the tape
+nf2obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf2obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Change the value of c
+nf2obj$c &lt;- 0.2
+Cnf2obj$c &lt;- 0.2
+# Compare compiled and uncompiled
+nf2obj$derivs_foo(3.)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf2obj$derivs_foo(3., reset=TRUE) # Record a new tape</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Test with an input not used for recording the tape
+nf2obj$derivs_foo(2.5)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf2obj$derivs_foo(2.5) ## CORRECT</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="holding-variables-out-of-ad-tracking" class="section level1">
+<h1>Holding variables out of AD tracking</h1>
+<p>We may want to include <code>c</code> as an argument but gain
+efficiency by never tracking derivatives through it if we don’t need
+to.</p>
+<pre class="r"><code>nf3 &lt;- nimbleFunction(
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double(),
+                   c1 = double(),    # Below we say to ignore c1
+                   c2 = integer()) { # Integers never have derivatives tracked
+      return(exp(c1 * c2 * x^2))
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          c1 = double(),
+                          c2 = integer(),
+                          reset = logical(0, default = FALSE)) {
+      d &lt;- derivs(foo(x, c1, c2), wrt = &quot;x&quot;, order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = list(foo = list(ignore = &quot;c1&quot;))
+)</code></pre>
+</div>
+<div id="holding-variables-out-of-ad-tracking-cont" class="section level1">
+<h1>Holding variables out of AD tracking (cont)</h1>
+<pre class="r"><code>nf3obj &lt;- nf3()
+Cnf3obj &lt;- compileNimble(nf3obj)</code></pre>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<pre class="r"><code># Compare compiled and uncompiled
+nf3obj$derivs_foo(3.,  0.05, 2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf3obj$derivs_foo(3., 0.05, 2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 2.459603
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 1.475762
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Test with an input not used for recording the tape
+nf3obj$derivs_foo(2.5, 0.05, 2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf3obj$derivs_foo(2.5, 0.05, 2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Use new values of c1 and/or c2:
+nf3obj$derivs_foo(2.5, 0.1, 2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf3obj$derivs_foo(2.5, 0.1, 2) # ERROR: old values of c1 and c2 are in the tape</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 1.868246
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 0.934123
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf3obj$derivs_foo(3., 0.1, 2, reset=TRUE) # Record a new tape (with any value of x)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 6.049647
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 7.259577
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf3obj$derivs_foo(2.5, 0.1, 2) # CORRECT: with c1=.1 and c2 = 2</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.490343
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 3.490343
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="understanding-if-then-else-and-for-loops-in-ad" class="section level1">
+<h1>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD</h1>
+<p>Any conditional branching or looping is baked into the tape (aka
+“unrolled” in the tape).</p>
+<p>Here is a strange way to calculate either <span class="math inline">\(x^p\)</span> or <span class="math inline">\((0.5
+x)^p\)</span>.</p>
+<pre class="r"><code>nf4 &lt;- nimbleFunction(
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double(),
+                   p = double(),
+                   half = logical()) { # Will be an integer, but say I use double()
+      if(!half) {
+        ans &lt;- x
+        for(i in 1:p) {
+          ans &lt;- ans*x
+        }  
+      } else {
+        ans &lt;- 0.5*x
+        for(i in 1:p) {
+          ans &lt;- ans*(0.5*x)
+        }
+      }
+      return(ans)
+      returnType(double())
+    },
+    derivs_foo = function(x=double(),
+                          p = double(),
+                          half = logical(),
+                          reset = logical(0, default = FALSE)) {
+      d &lt;- derivs(foo(x, p, half), wrt = &quot;x&quot;, order = 0:1, reset = reset)
+      return(d)
+      returnType(ADNimbleList()) 
+    }
+  ),
+  buildDerivs = list(foo = list(ignore = c(&#39;p&#39;,&#39;i&#39;))) # Necessary to avoid an error
+)</code></pre>
+</div>
+<div id="understanding-if-then-else-and-for-loops-in-ad-cont." class="section level1">
+<h1>Understanding <code>if</code>-<code>then</code>-<code>else</code>
+and <code>for</code>-loops in AD (cont.)</h1>
+<pre class="r"><code>nf4obj &lt;- nf4()
+Cnf4obj &lt;- compileNimble(nf4obj)</code></pre>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<pre class="r"><code># Compare compiled and uncompiled
+nf4obj$derivs_foo(1.5, 3, FALSE)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 5.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 13.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf4obj$derivs_foo(1.5, 3, FALSE)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 5.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 13.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Test with an input not used for recording the tape
+nf4obj$derivs_foo(2.5, 3, FALSE)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf4obj$derivs_foo(2.5, 3, FALSE)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Use new values of p and/or half:
+nf4obj$derivs_foo(2.5, 4, TRUE)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.051758
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 6.103516
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf4obj$derivs_foo(2.5, 4, TRUE) # ERROR: old values of p and half are used</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 39.0625
+## Field &quot;jacobian&quot;:
+##      [,1]
+## [1,] 62.5
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf4obj$derivs_foo(1.5, 4, TRUE, reset=TRUE) # Record a new tape (with any value of x)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 0.2373047
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] 0.7910156
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf4obj$derivs_foo(2.5, 4, TRUE) # CORRECT: with p=4 and half=TRUE</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.051758
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 6.103516
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+</div>
+<div id="more-about-using-ad-with-models" class="section level1">
+<h1>More about using AD with models</h1>
 <ul>
-<li>Define <span class="math inline">\(n\)</span> = length of inputs and
-<span class="math inline">\(m\)</span> = length of outputs.</li>
-<li><strong>value</strong> is a vector of length <span class="math inline">\(m\)</span>.</li>
-<li><strong>jacobian</strong> is an <span class="math inline">\(m \times
-n\)</span> matrix (<span class="math inline">\(m\)</span> rows and <span class="math inline">\(n\)</span> columns).</li>
-<li><strong>hessian</strong> is an <span class="math inline">\(n \times
-n \times m\)</span> array.</li>
-<li>Notice the output index is the <em>first</em> index in
-<em>jacobian</em> but the <em>last</em> index in <em>hessian</em>.</li>
-<li>First two indices of <em>hessian</em> are interchangeable due to
-symmetry of partial derivatives.</li>
-<li>You can omit lower-orders (e.g., use <code>order = 1</code> for the
-jacobian only, omitting the value), but lower orders <em>will be
-calculated</em> in order to obtain higher orders.</li>
-<li><code>ADNimbleList()</code> is a pre-defined <em>nimbleList</em>
-type with elements <code>value</code>, <code>jacobian</code>, and
-<code>hessian</code>.</li>
+<li>When recording a tape using a model, all values that will be used
+need to be copied (internally) from the regular model to the AD model.
+You need to provide information about which nodes are needed, in two
+categories: <code>constantNodes</code> (not the same as
+<code>constants</code> in <code>nimbleModel</code>) and
+<code>updateNodes</code>.</li>
+<li>When using a tape recorded with a model, one can update values that
+might have changed (without resetting the tape).</li>
+</ul>
+<p>Let’s look at an example (simple model used earlier):</p>
+<pre class="r"><code>model_code &lt;- nimbleCode({
+  y ~ dnorm(mean = mu, sd = sigma)
+  mu &lt;- intercept + slope * x
+  intercept ~ dnorm(0, sd = 1000)
+  sigma ~ dunif(0, 10)
+})</code></pre>
+<ul>
+<li>Say <code>y</code> is data.</li>
+<li><code>model$calculate(&#39;y&#39;)</code> returns the log probability
+density of <code>y</code>.</li>
+<li><code>model$calculate(c(&#39;mu&#39;,&#39;y&#39;))</code> calculates <code>mu</code>
+and then returns the log probability density of <code>y</code>.</li>
+<li>Say we will want derivative(s) of
+<code>model$calculate(&#39;mu&#39;, &#39;y&#39;)</code> with respect to
+<code>slope</code>.</li>
+<li>Values needed: <code>y</code>, <code>intercept</code>,
+<code>slope</code>, <code>x</code>, and <code>sigma</code>.</li>
+<li>Values that might <strong>not</strong> change between derivative
+calls: <code>y</code>, <code>x</code>. These are
+<strong>constantNodes</strong>.</li>
+<li>Values that might change between derivative calls:
+<code>intercept</code>, <code>slope</code>, <code>sigma</code>. These
+are <strong>updateNodes</strong>.</li>
 </ul>
 </div>
-<div id="second-example-derivatives-of-model-log-probabilities" class="section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Make a simple model.</p>
+<div id="more-about-using-ad-with-models-cont." class="section level1">
+<h1>More about using AD with models (cont.)</h1>
+<p>Build the example model:</p>
 <pre class="r"><code>model_code &lt;- nimbleCode({
   y ~ dnorm(mean = mu, sd = sigma)
   mu &lt;- intercept + slope * x
@@ -612,9 +905,8 @@ type with elements <code>value</code>, <code>jacobian</code>, and
 m &lt;- nimbleModel(model_code,
                  inits = list(intercept = 1.2, slope = 0.5,
                               sigma = 0.7),
-                 data = list(y = 6),
-                 constants = list(x = 10),
-                 buildDerivs = TRUE, # ALLOW DERIVATIVES FOR THIS MODEL
+                 data = list(y = 6, x = 8.3), # Notice I put x as data, not constants
+                 buildDerivs = TRUE,
                  )</code></pre>
 <pre><code>## Defining model</code></pre>
 <pre><code>## Building model</code></pre>
@@ -622,529 +914,176 @@ m &lt;- nimbleModel(model_code,
 <pre><code>## Running calculate on model
 ##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
 <pre><code>## Checking model sizes and dimensions</code></pre>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-1" class="section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Write a nimbleFunction to get derivatives of model$calculate.</p>
-<pre class="r"><code>nf2 &lt;- nimbleFunction(
-  setup = function(model, nodes) {},
-  methods = list(
-    derivs_log_prob = function() {
-      d &lt;- derivs(model$calculate(nodes),
-                  wrt=c(&quot;intercept&quot;, &quot;slope&quot;, &quot;sigma&quot;),
-                  order = 0:2)
-      return(d)
-      returnType(ADNimbleList())
-    }
-  )
-)</code></pre>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-2" class="section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Use it uncompiled.</p>
-<pre class="r"><code>calc_nodes &lt;- m$getDependencies(c(&quot;intercept&quot;, &quot;slope&quot;, &quot;sigma&quot;))
-calc_nodes</code></pre>
-<pre><code>## [1] &quot;intercept&quot; &quot;sigma&quot;     &quot;mu&quot;        &quot;y&quot;</code></pre>
-<pre class="r"><code>nf2obj &lt;- nf2(m, calc_nodes)
-nf2obj$derivs_log_prob()</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -10.73236
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]      [,3]
-## [1,] -0.4081645 -4.081633 -1.311953
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##            [,1]       [,2]      [,3]
-## [1,]  -2.040817  -20.40816  1.166181
-## [2,] -20.408163 -204.08163 11.661808
-## [3,]   1.166181   11.66181  1.541025</code></pre>
-</div>
-<div id="second-example-derivatives-of-model-log-probabilities-3" class="section level1">
-<h1>Second example: Derivatives of model log probabilities</h1>
-<p>Use it compiled.</p>
-<pre class="r"><code>comp &lt;- compileNimble(m, nf2obj)</code></pre>
+<pre class="r"><code>cm &lt;- compileNimble(m)</code></pre>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>comp$nf2obj$derivs_log_prob()</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -10.73236
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]      [,3]
-## [1,] -0.4081645 -4.081633 -1.311953
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##            [,1]       [,2]      [,3]
-## [1,]  -2.040817  -20.40816  1.166181
-## [2,] -20.408163 -204.08163 11.661808
-## [3,]   1.166181   11.66181  1.541025</code></pre>
+<p>Scalar constants are baked into a model and do not exist as nodes, so
+I made <code>x</code> be data for illustration.</p>
 </div>
-<div id="more-about-understanding-outputs-and-testing" class="section level1">
-<h1>More about understanding outputs and testing</h1>
-<ul>
-<li><p>Uncompiled derivatives use finite-element methods from packages
-<code>numDeriv</code> and/or <code>pracma</code>.</p>
-<ul>
-<li>These might not match compiled derivatives exactly due to
-finite-element approximation.</li>
-<li>Uncompiled execution can be slow for large calculations.</li>
-</ul></li>
-<li><p>The first compiled call to <code>derivs</code> (aka
-<code>nimDerivs</code>) records the AD tape, so it is much slower than
-later calls.</p></li>
-<li><p>Always test compiled derivatives on new values after the first
-call.</p>
-<ul>
-<li>This checks that values have not been (incorrectly) “baked in” to
-the AD tape.</li>
-<li>This was not illustrated in first two examples.</li>
-</ul></li>
-<li><p>Model inputs are ordered to match the <code>wrt</code> argument,
-flattened and concatenated.</p>
-<ul>
-<li>This is essential to use <code>jacobian</code> and
-<code>hessian</code> results correctly.</li>
-</ul></li>
-</ul>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations." class="section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Use the same model as above. For good measure, make a new copy.</p>
-<pre class="r"><code>m2 &lt;- m$newModel()</code></pre>
-<pre><code>## Setting data and initial values</code></pre>
-<pre><code>## Running calculate on model
-##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
-<pre><code>## Checking model sizes and dimensions</code></pre>
-<p>Say we will provide a vector of
-<code>(intercept, slope, log_sigma)</code> and we need to calculate
-<code>sigma = exp(log_sigma)</code> before using it in the model.</p>
-<pre class="r"><code>nf3 &lt;- nimbleFunction(
-  setup = function(model, param_nodes, calc_nodes) {
-    # param_nodes will be c(&quot;intercept&quot;, &quot;slope&quot;, &quot;sigma&quot;)
-    updateNodes &lt;- character() # more about these later
-    constantNodes &lt;- &quot;y&quot;
+<div id="more-about-using-ad-with-models-cont.-1" class="section level1">
+<h1>More about using AD with models (cont.)</h1>
+<pre class="r"><code>nf5 &lt;- nimbleFunction(
+  setup = function(model) {
+    calc_nodes &lt;- c(&#39;mu&#39;, &#39;y&#39;) # Normally, use model-generic programming, not hand-coded nodes
+    constantNodes &lt;- c(&#39;y&#39;,&#39;x&#39;)
+    updateNodes &lt;- c(&#39;slope&#39;,&#39;intercept&#39;,&#39;sigma&#39;)
+    param &lt;- &#39;slope&#39;
   },
-  run = function(param_values = double(1)) {
-    # param_values will be (intercept, slope, log_sigma)
-    param_values[3] &lt;- exp(param_values[3])
-    values(model, param_nodes) &lt;&lt;- param_values # The ONLY valid way to put values in a model for AD
+  run = function(slope = double()) {
+    temp &lt;- numeric(value = slope, length = 1)
+    values(model, param) &lt;&lt;- temp # c(slope) makes a scalar into a vector
     log_prob &lt;- model$calculate(calc_nodes)
     return(log_prob)
     returnType(double())
   },
   methods = list(
-    derivs_run = function(param_values = double(1)) {
-      wrt &lt;- 1:length(param_values) # indices, not names
-      ans &lt;- derivs(run(param_values), wrt = wrt,
-                    order = 0:2,
+    derivs_run = function(slope = double(),
+                          reset = logical(0, default=FALSE)) {
+      wrt &lt;- numeric(length = 1, value = 1) # indices, not names
+      ans &lt;- derivs(run(slope), wrt = wrt,
+                    order = 0:1,
                     updateNodes = updateNodes,
                     constantNodes = constantNodes,
-                    model = model)
+                    model = model,
+                    reset = reset)
       return(ans)
       returnType(ADNimbleList())
     }
   ),
   buildDerivs = &#39;run&#39;
-) </code></pre>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations.-1" class="section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Make an object:</p>
-<pre class="r"><code>param_nodes &lt;- c(&quot;intercept&quot;, &quot;slope&quot;, &quot;sigma&quot;)
-calc_nodes &lt;- m2$getDependencies(param_nodes, self = FALSE) # omit priors, just to make it more interesting
-calc_nodes</code></pre>
-<pre><code>## [1] &quot;mu&quot; &quot;y&quot;</code></pre>
-<pre class="r"><code>nf3obj &lt;- nf3(m2, param_nodes, calc_nodes)</code></pre>
-<p>Use it uncompiled:</p>
-<pre class="r"><code>x &lt;- c(1.2, .5, log(0.7))
-nf3obj$derivs_run(x)</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -0.6030799
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]       [,3]
-## [1,] -0.4081633 -4.081633 -0.9183673
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##             [,1]        [,2]       [,3]
-## [1,]  -2.0408163  -20.408163  0.8163265
-## [2,] -20.4081633 -204.081633  8.1632654
-## [3,]   0.8163265    8.163265 -0.1632653</code></pre>
-</div>
-<div id="third-example-derivatives-of-model-log-probabilities-with-other-calculations.-2" class="section level1">
-<h1>Third example: Derivatives of model log probabilities with other
-calculations.</h1>
-<p>Use it compiled:</p>
-<pre class="r"><code>comp2 &lt;- compileNimble(m2, nf3obj)</code></pre>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>x_tape &lt;- c(1.4, .2, log(0.4))
-comp2$nf3obj$derivs_run(x_tape)</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -21.12765
-## Field &quot;jacobian&quot;:
-##       [,1]  [,2]  [,3]
-## [1,] 16.25 162.5 41.25
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##        [,1]   [,2]   [,3]
-## [1,]  -6.25  -62.5  -32.5
-## [2,] -62.50 -625.0 -325.0
-## [3,] -32.50 -325.0  -84.5</code></pre>
-<pre class="r"><code>x &lt;- c(1.2, .5, log(0.7))
-comp2$nf3obj$derivs_run(x)</code></pre>
-<pre><code>## nimbleList object of type NIMBLE_ADCLASS
-## Field &quot;value&quot;:
-## [1] -0.6030799
-## Field &quot;jacobian&quot;:
-##            [,1]      [,2]       [,3]
-## [1,] -0.4081633 -4.081633 -0.9183673
-## Field &quot;hessian&quot;:
-## , , 1
-## 
-##             [,1]        [,2]       [,3]
-## [1,]  -2.0408163  -20.408163  0.8163265
-## [2,] -20.4081633 -204.081633  8.1632653
-## [3,]   0.8163265    8.163265 -0.1632653</code></pre>
-</div>
-<div id="understanding-the-results" class="section level1">
-<h1>Understanding the results</h1>
-<ul>
-<li><p><code>values(model, nodes) &lt;&lt;- x</code> is the
-<em>only</em> way to put values into model nodes that will be recorded
-on the AD tape.</p></li>
-<li><p><code>model$x &lt;&lt;- value</code> and
-<code>model[[node]] &lt;&lt;- value</code> will not be recorded and are
-errors. They may be supported in the future.</p></li>
-<li><p>In example 3, only derivatives with respect to (wrt) the third
-input differ from example 2, because example 3 includes
-<code>sigma = exp(log_sigma)</code>.</p></li>
-<li><p><code>updateNodes</code> and <code>constantNodes</code> are
-essential for correct use of the model and correct results. We will
-cover these more later.</p></li>
-<li><p>Other points not covered yet include:</p>
-<ul>
-<li><code>reset</code> argument to <code>derivs</code> (aka
-<code>nimDerivs</code>), which resets the AD tape.</li>
-<li><code>wrt</code> argument can be indices or names.</li>
-<li>What variables and/or steps get “baked in” to AD tapes.</li>
-<li>Omitting variables from derivative tracking.</li>
-<li>Double-taping.</li>
-<li>System for generic parameter transformations.</li>
-</ul></li>
-</ul>
-</div>
-<div id="summary-of-ways-to-use-ad" class="section level1">
-<h1>Summary of ways to use AD</h1>
-<ul>
-<li>For calculations outside of a model:
-<code>nimDerivs(foo(x), ...)</code> , i.e. “nimDerivs of a
-function”.</li>
-<li>For model log probabilities with no other steps:
-<code>nimDerivs(model$calculate(...), ...)</code>, i.e. “nimDerivs of
-model calculate”.</li>
-<li>For model log probabilities amid other steps:
-<code>nimDerivs(foo(x),...)</code> where <code>foo(x)</code> contains
-<code>model$calculate(...)</code>, i.e. “nimDerivs of a function
-containing model calculate”.</li>
-</ul>
-</div>
-<div id="fourth-example-laplace-approximation" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Laplace approximation:</p>
-<ul>
-<li><p>data: <span class="math inline">\(y\)</span></p></li>
-<li><p>random effect: <span class="math inline">\(x\)</span></p></li>
-<li><p>parameters: <span class="math inline">\(\theta\)</span></p></li>
-<li><p>Want marginal probability of data: <span class="math inline">\(\int P(y | x, \theta) P(x | \theta)
-dx\)</span>.</p></li>
-<li><p>Approximate by:</p>
-<ul>
-<li>Find <span class="math inline">\(x^{*}\)</span> that maximizes <span class="math inline">\(P(y | x, \theta) P(x | \theta)\)</span> with
-respect to <span class="math inline">\(x\)</span>.</li>
-<li>Compute the Hessian of <span class="math inline">\(\log(P(y | x,
-\theta) P(x | \theta))\)</span> at <span class="math inline">\(x =
-x^{*}\)</span>.</li>
-<li>Do a calculation with <span class="math inline">\(P(y | x^{*},
-\theta) P(x^{*} | \theta)\)</span> and the Hessian.</li>
-</ul></li>
-</ul>
-</div>
-<div id="fourth-example-use-deer-e.-cervi-glmm" class="section level1">
-<h1>Fourth example: Use Deer E. cervi GLMM</h1>
-<p>We’ve used this previously. Here is the code in case we need to look
-at it:</p>
-<pre class="r"><code>DEcode &lt;- nimbleCode({
-  for(i in 1:2) {
-    # Priors for intercepts and length coefficients for sex = 1 (male), 2 (female)
-    sex_int[i] ~ dnorm(0, sd = 1000)
-    length_coef[i] ~ dnorm(0, sd = 1000)
-  }
-
-  # Priors for farm random effects and their standard deviation.
-  farm_sd ~ dunif(0, 20)
-  for(i in 1:num_farms) {
-    farm_effect[i] ~ dnorm(0, sd = farm_sd)
-  }
-
-  # logit link and Bernoulli data probabilities
-  for(i in 1:num_animals) {
-    logit(disease_probability[i]) &lt;-
-      sex_int[ sex[i] ] +
-      length_coef[ sex[i] ]*length[i] +
-      farm_effect[ farm_ids[i] ]
-    Ecervi_01[i] ~ dbern(disease_probability[i])
-  }
-})
-
-DEconstants &lt;- list(num_farms = 24,
-                    num_animals = 826,
-                    length = DeerEcervi$ctrLength,
-                    sex = DeerEcervi$Sex,
-                    farm_ids = DeerEcervi$farm_ids)</code></pre>
-</div>
-<div id="fourth-example-laplace-approximation-1" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Make Deer E. cervi model with derivative tools built.</p>
-<pre class="r"><code>DEmodel &lt;- nimbleModel(DEcode,
-                       data = DEdata,
-                       constants = DEconstants,
-                       inits = DEinits_vals,
-                       buildDerivs = TRUE)</code></pre>
-<pre><code>## Defining model</code></pre>
-<pre><code>## Building model</code></pre>
-<pre><code>## Setting data and initial values</code></pre>
-<pre><code>## Running calculate on model
-##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
-<pre><code>## Checking model sizes and dimensions</code></pre>
-<pre class="r"><code>C_DEmodel &lt;- compileNimble(DEmodel)</code></pre>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-</div>
-<div id="fourth-example-laplace-approximation-2" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Here is a nimbleFunction for a basic univariate Laplace
-approximation.</p>
-<pre class="r"><code>simple_1D_Laplace &lt;- nimbleFunction(
-  setup = function(model, RE_node, calc_nodes) {
-    derivsInfo &lt;- makeDerivsInfo(model, RE_node, calc_nodes)
-    updateNodes &lt;- derivsInfo$updateNodes
-    constantNodes &lt;- derivsInfo$constantNodes
-  },
-  methods = list(
-    # Calculate -log(P(y | x, theta) P(x | theta)) from input x
-    negLogLik = function(x = double(1)) {
-      values(model, RE_node) &lt;&lt;- x
-      res &lt;- -model$calculate(calc_nodes)
-      return(res)
-      returnType(double())
-    },
-    # Get derivatives of -log(P(y | x, theta) P(x | theta))
-    derivs_negLogLik = function(x = double(1),
-                                order = integer(1)) {
-      ans &lt;- derivs(negLogLik(x), wrt = 1:length(x), order = order,
-                   updateNodes = updateNodes,
-                   constantNodes = constantNodes,
-                   model = model)
-      return(ans)
-      returnType(ADNimbleList())
-    },
-    # Pull out the gradient of -log(P(y | x, theta) P(x | theta))
-    gr_negLogLik = function(x = double(1)) {
-      gr &lt;- derivs_negLogLik(x, order = c(1L))
-      return(gr$jacobian[1,])
-      returnType(double(1))
-    },
-    # Put the pieces together:
-    Laplace = function() {
-      # Use correct value of random effect as initial value
-      # for optimization.
-      x_init &lt;- numeric(length = 1)
-      x_init[1] &lt;- model[[RE_node]]
-      # Do optimization using a conjugate gradient method
-      # that uses the AD gradient.
-      # This is a minimization of the negative log probability
-      optim_result &lt;- optim(par = x_init,
-                            fn = negLogLik, gr = gr_negLogLik,
-                            method = &quot;CG&quot;)
-      # Get the value at the maximum, x^*
-      optim_logLik &lt;- -optim_result$value
-      # Get the second derivative at the maximum
-      optim_neg_hessian &lt;- derivs_negLogLik(optim_result$par,
-                                            order = c(2L))
-      log_sigma2 &lt;- -log(optim_neg_hessian$hessian[1,1,1])
-      # Calculate the Laplace approximation
-      Laplace_approx &lt;- optim_logLik + 0.5 * log_sigma2 + 0.5 * log(2*pi)
-      # Leave the model in its original state by replacing the
-      # original value and re-calculating.
-      model[[RE_node]] &lt;&lt;- x_init[1]
-      model$calculate(calc_nodes)
-      return(Laplace_approx)
-      returnType(double())
-    }
-  ),
-  buildDerivs = &#39;negLogLik&#39;
 )</code></pre>
+<p>Notice that <code>updateNodes</code>, <code>model</code>, and
+<code>constantNodes</code> are needed for <code>derivs</code>, so
+<code>derivs_run</code> and <code>run</code> are tightly coupled
+functions.</p>
 </div>
-<div id="fourth-example-laplace-approximation-3" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Try the Laplace approximation for the first random effect.</p>
-<pre class="r"><code>RE_node &lt;- &quot;farm_effect[1]&quot;
-calc_nodes &lt;- DEmodel$getDependencies(RE_node)
-test &lt;- simple_1D_Laplace(DEmodel, RE_node, calc_nodes)
-ctest &lt;- compileNimble(test, project = C_DEmodel)</code></pre>
+<div id="more-about-using-ad-with-models-cont.-2" class="section level1">
+<h1>More about using AD with models (cont.)</h1>
+<pre class="r"><code>nf5obj &lt;- nf5(m)
+Cnf5obj &lt;- compileNimble(nf5obj, project = m)</code></pre>
 <pre><code>## Compiling
 ##   [Note] This may take a minute.
 ##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>ctest$Laplace()</code></pre>
-<pre><code>## [1] -10.92875</code></pre>
+<pre class="r"><code># Note current values of mu in uncompiled and compiled models
+m$mu</code></pre>
+<pre><code>## [1] 5.35</code></pre>
+<pre class="r"><code>cm$mu</code></pre>
+<pre><code>## [1] 5.35</code></pre>
+<pre class="r"><code># Get derivatives
+nf5obj$derivs_run(slope=0.7)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -1.603182
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -17.10816
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf5obj$derivs_run(slope=0.7)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -1.603182
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -17.10816
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Note that values of mu were updated
+m$mu</code></pre>
+<pre><code>## [1] 7.01</code></pre>
+<pre class="r"><code>cm$mu</code></pre>
+<pre><code>## [1] 7.01</code></pre>
+<pre class="r"><code># Get derivatives with new slope, after changing sigma
+m$sigma &lt;- 0.3
+cm$sigma &lt;- 0.3
+nf5obj$derivs_run(slope=0.8)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf5obj$derivs_run(slope=0.8)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Note that values of mu were updated
+m$mu</code></pre>
+<pre><code>## [1] 7.84</code></pre>
+<pre class="r"><code>cm$mu</code></pre>
+<pre><code>## [1] 7.84</code></pre>
+<pre class="r"><code># Change a constantNode&#39;s value: DANGER!
+m$y &lt;- 9
+cm$y &lt;- 9
+nf5obj$derivs_run(slope=0.8)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -7.190521
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 106.9778
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code>Cnf5obj$derivs_run(slope=0.8) # ERROR: old value of y is baked into tape</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -18.52385
+## Field &quot;jacobian&quot;:
+##           [,1]
+## [1,] -169.6889
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># Reset the tape to bake in the new values of constantNodes
+Cnf5obj$derivs_run(slope=0.8, reset=TRUE) # CORRECT</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -7.190521
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 106.9778
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
 </div>
-<div id="fourth-example-laplace-approximation-4" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>What is missing from this simple example?</p>
-<ul>
-<li>We want determination of random effects nodes and calculation nodes
-to be automatic (but customizable).</li>
-<li>We need to handle scalar or vector random effects.</li>
-<li>We need to maximize the Laplace approximation with respect to the
-model parameters. This is a complicated problem because the gradient of
-the Laplace approximation involves third derivatives.</li>
-<li>We can consider various ways to arrange the different derivatives
-for efficiency using double-taping schemes.</li>
-<li>We can avoid recalculating the value when obtaining the
-gradient.</li>
-<li>We need various error trapping and robustness checks.</li>
-<li>We need to handle parameters and/or random effects that have
-constraints on valid values (e.g. variance &gt; 0).</li>
-</ul>
-<p>The full-blown Laplace approximation with all of these features is in
-the AD version of <code>nimble</code>.</p>
-<ul>
-<li>Future work may include different choices of optimization
-methods.</li>
-</ul>
+<div id="using-ad-in-user-defined-functions-and-distributions" class="section level1">
+<h1>Using AD in user-defined functions and distributions</h1>
+<p>Simply add <code>buildDerivs=TRUE</code> to the
+<code>nimbleFunction</code> for the user-defined function or
+distribution.</p>
+<p>(Or
+<code>buildDerivs = list(run = list(ignore = c(&#39;param1&#39;,&#39;param2&#39;)))</code>
+to leave <code>param1</code> and <code>param2</code> out of derivative
+tracking.)</p>
 </div>
-<div id="fourth-example-laplace-approximation-skip-this-slide" class="section level1">
-<h1>Fourth example: Laplace approximation (Skip this slide)</h1>
-<p>This slide shows use of the fully built Laplace approximation to
-check the demonstration code above. We don’t need to go through it.</p>
-<pre class="r"><code>param_nodes &lt;- DEmodel$getNodeNames(topOnly = TRUE)
-DE_Laplace &lt;- buildLaplace(DEmodel, paramNodes = param_nodes,
-                           randomEffectsNodes = RE_node,
-                           calcNodes = calc_nodes)</code></pre>
-<pre><code>## Warning in buildLaplace(DEmodel, paramNodes = param_nodes, randomEffectsNodes = RE_node, : There are some random effects (latent states) in the model that look
-## like they should be included in randomEffectsNodes for Laplace approximation
-## for the provided (or default) paramNodes:
-## farm_effect[2], , farm_effect[3], , farm_effect[4], , farm_effect[5],  ...
-## To silence this warning, include &#39;warn = FALSE&#39; in
-## the control list.</code></pre>
-<pre class="r"><code>C_DE_Laplace &lt;- compileNimble(DE_Laplace, project = DEmodel)</code></pre>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>param_values &lt;- values(C_DEmodel, param_nodes)
-C_DE_Laplace$Laplace(param_values)</code></pre>
-<pre><code>## [1] -10.92875</code></pre>
-<pre class="r"><code># See which parameters these correspond to:
-param_nodes</code></pre>
-<pre><code>## [1] &quot;sex_int[1]&quot;     &quot;sex_int[2]&quot;     &quot;length_coef[1]&quot; &quot;length_coef[2]&quot;
-## [5] &quot;farm_sd&quot;</code></pre>
+<div id="using-makederivsinfo-to-determine-constantnodes-and-updatenodes" class="section level1">
+<h1>Using <code>makeDerivsInfo</code> to determine
+<code>constantNodes</code> and <code>updateNodes</code></h1>
+<p>TBD</p>
 </div>
-<div id="fourth-example-laplace-approximation-5" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Use the fully built Laplace approximation, handling all the random
-effects and maximizing the Laplace-approximated log likelihood.</p>
-<pre class="r"><code>DE_Laplace &lt;- buildLaplace(DEmodel)
-C_DE_Laplace &lt;- compileNimble(DE_Laplace, project = DEmodel)</code></pre>
-<pre><code>## Compiling
-##   [Note] This may take a minute.
-##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
-<pre class="r"><code>LaplaceMLE &lt;- C_DE_Laplace$LaplaceMLE()</code></pre>
-<pre><code>## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation
-## Warning: optim does not converge for the inner optimization of Laplace approximation</code></pre>
-<pre><code>## Warning in C_DE_Laplace$LaplaceMLE(): Hessian computation is not implemented</code></pre>
-<pre class="r"><code>C_DE_Laplace$inverseTransform(LaplaceMLE$par)</code></pre>
-<pre><code>## [1] 0.93958594 1.56417418 0.03897847 0.07483991 1.54687755</code></pre>
-<p>Notice the <code>inverseTransform</code> step. We will likely change
-this behavior in the future so that LaplaceMLE returns the
-inverse-transformed parameters.</p>
-</div>
-<div id="fourth-example-laplace-approximation-6" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>Since this is a GLMM, we can compare to a specialized implementation
-of Laplace approximation. We’ll use <code>lme4</code>.</p>
-<pre class="r"><code>library(lme4)
-lme4_fit &lt;- glmer(Ecervi_01 ~ ctrLength*fSex + (1 | fFarm), family = binomial, data = DeerEcervi)
-summary(lme4_fit)</code></pre>
-<pre><code>## Generalized linear mixed model fit by maximum likelihood (Laplace
-##   Approximation) [glmerMod]
-##  Family: binomial  ( logit )
-## Formula: Ecervi_01 ~ ctrLength * fSex + (1 | fFarm)
-##    Data: DeerEcervi
-## 
-##      AIC      BIC   logLik deviance df.resid 
-##    832.6    856.1   -411.3    822.6      821 
-## 
-## Scaled residuals: 
-##     Min      1Q  Median      3Q     Max 
-## -6.2678 -0.6090  0.2809  0.5022  3.4546 
-## 
-## Random effects:
-##  Groups Name        Variance Std.Dev.
-##  fFarm  (Intercept) 2.391    1.546   
-## Number of obs: 826, groups:  fFarm, 24
-## 
-## Fixed effects:
-##                 Estimate Std. Error z value Pr(&gt;|z|)    
-## (Intercept)     0.938969   0.356001   2.638  0.00835 ** 
-## ctrLength       0.038964   0.006917   5.633 1.77e-08 ***
-## fSex2           0.624487   0.222938   2.801  0.00509 ** 
-## ctrLength:fSex2 0.035859   0.011409   3.143  0.00167 ** 
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-## Correlation of Fixed Effects:
-##             (Intr) ctrLng fSex2 
-## ctrLength   -0.107              
-## fSex2       -0.189  0.238       
-## ctrLngth:S2  0.091 -0.514  0.232</code></pre>
-</div>
-<div id="fourth-example-laplace-approximation-7" class="section level1">
-<h1>Fourth example: Laplace approximation</h1>
-<p>How do the parameters match between <code>nimble</code> and
-<code>lme4</code> results?</p>
-<p><code>lme4</code> is using treatment contrasts (Sex1 is the
-“reference” group and Sex2 parameters are differences from Sex1).</p>
-<ul>
-<li>First parameter from <code>nimble</code> is the Sex1 intercept,
-which is the <code>(Intercept)</code> from <code>lme4</code>.</li>
-<li>Second parameter from <code>nimble</code> is the Sex2 intercept,
-which is <code>(Intercept)</code> + <code>fSex2</code> from
-<code>lme4</code>.</li>
-<li>Third parameter from <code>nimble</code> is the Sex1 coefficient for
-<code>ctrLength</code>.</li>
-<li>Fourth parameter from <code>nimble</code> is the Sex2 coefficient
-for <code>ctrLength</code>, which is <code>ctrLength</code> +
-<code>ctrLength:fSex2</code> from <code>lme4</code>.</li>
-<li>Fifth parameter from <code>nimble</code> is the farm-effect standard
-deviation.</li>
-</ul>
+<div id="generic-parameter-transformations" class="section level1">
+<h1>Generic parameter transformations</h1>
+<p>It is often useful to let algorithms operate on unconstrained
+parameter spaces. E.g. most optimization algorithms don’t handle
+parameter boundaries well (or at all). HMC would have problems with
+parameter boundaries.</p>
+<p>In the AD beta-release, we provide a generic parameter transformation
+system. It is motivated by AD use cases and supports derivative
+tracking, but it can be used for any purpose.</p>
+<p>To be continued…</p>
 </div>
 
 

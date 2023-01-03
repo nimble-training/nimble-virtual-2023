@@ -152,7 +152,7 @@ cnf1obj$derivs_foo(3)
 
 # Understanding derivative outputs:
 
-* Define $n$ = number of inputs and $m$ = number of outputs.
+* Define $n$ = length of inputs and $m$ = length of outputs.
 * **value** is a vector of length $m$.
 * **jacobian** is an $m \times n$ matrix ($m$ rows and $n$ columns).
 * **hessian** is an $n \times n \times m$ array.
@@ -307,10 +307,8 @@ comp2$nf3obj$derivs_run(x)
 
 # Understanding the results
 
-* `values(model, nodes)<-x` is the *only* way to put values into model nodes that will be recorded on the AD tape.  
-
-    * `model$x <- value` and `model[[node]] <- value` will not be recorded and are errors.  They may be supported in the future.
-  
+* `values(model, nodes) <<- x` is the *only* way to put values into model nodes that will be recorded on the AD tape.
+* `model$x <<- value` and `model[[node]] <<- value` will not be recorded and are errors.  They may be supported in the future. 
 * In example 3, only derivatives with respect to (wrt) the third input differ from example 2, because example 3 includes `sigma = exp(log_sigma)`.
 * `updateNodes` and `constantNodes` are essential for correct use of the model and correct results.  We will cover these more later.
 * Other points not covered yet include:
@@ -324,7 +322,7 @@ comp2$nf3obj$derivs_run(x)
     
 # Summary of ways to use AD 
 
-* For calculations outside of a model: `nimDerivs(foo(x), ...)` , i.e. "nimDerivs of foo".
+* For calculations outside of a model: `nimDerivs(foo(x), ...)` , i.e. "nimDerivs of a function".
 * For model log probabilities with no other steps: `nimDerivs(model$calculate(...), ...)`, i.e. "nimDerivs of model calculate".
 * For model log probabilities amid other steps: `nimDerivs(foo(x),...)` where `foo(x)` contains `model$calculate(...)`, i.e. "nimDerivs of a function containing model calculate".
 
@@ -335,10 +333,10 @@ Laplace approximation:
 * data: $y$
 * random effect: $x$
 * parameters: $\theta$
-* Need: $\int P(y | x, \theta) P(x | \theta) dx$.
+* Want marginal probability of data: $\int P(y | x, \theta) P(x | \theta) dx$.
 * Approximate by:
 
-  * Find $x^{*}$ that maximizes $P(y | x, \theta) P(x | \theta)$.
+  * Find $x^{*}$ that maximizes $P(y | x, \theta) P(x | \theta)$ with respect to $x$.
   * Compute the Hessian of $\log(P(y | x, \theta) P(x | \theta))$ at $x = x^{*}$.
   * Do a calculation with $P(y | x^{*}, \theta) P(x^{*} | \theta)$ and the Hessian.
   
