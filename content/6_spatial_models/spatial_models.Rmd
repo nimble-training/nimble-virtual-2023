@@ -505,6 +505,7 @@ code_hmc <- nimbleCode({
   }
 })
 
+inits <- list(beta = 0, mu0 = 0, sigma = 1, rho = 0.2)
 model <- nimbleModel(code_hmc, constants = constants, inits = inits, data = data,
       buildDerivs = TRUE)
 cModel <- compileNimble(model)
@@ -513,11 +514,11 @@ library(nimbleHMC)
 hmc <- buildHMC(model, monitors = c(model$getNodeNames(topOnly = TRUE), 'x'))
 cHMC <- compileNimble(hmc, project = model)
 
+set.seed(1)
 system.time(samplesHMC <- runMCMC(cHMC, niter = 1500, nburnin = 750))
 ```
 
-That takes a while, in part be because of some room for improvement in NIMBLE's AD efficiency with linear algebra calculations.
-Stan is a bit more than twice as fast in this case.
+That takes a while because of the cost of gradient evaluation. Also there is some room for improvement in NIMBLE's AD efficiency with linear algebra calculations. NIMBLE's HMC takes about 50% longer than Stan in this case. Note also that HMC timing can vary widely with different initial values.
 
 # Results
 

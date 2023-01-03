@@ -252,7 +252,7 @@ So the blocking helps a lot, though the farm effects show some oscillations. (A 
 
 # 5) HMC
 
-Let's consider HMC. The standard advice with random effects is to use a non-centered parameterization, which basically means writing out things like $x \sim N(\mu, \sigma)$ as $x = \mu + \sigma * z$ for $z \sim N(0,1)$.
+Let's consider HMC. The standard advice with random effects is to use a non-centered parameterization, which basically means writing out things like $x \sim N(\mu, \sigma)$ as $x = \mu + \sigma z$ for $z \sim N(0,1)$.
 
 The original code did use non-centering in terms of the mean, so it's already using a partially non-centered parameterization. But it didn't use non-centering in terms of the `farm_sd` parameter. So we'll modify the code a bit:
 

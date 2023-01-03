@@ -42,10 +42,10 @@ Day 2 (Thursday January 5):
 
 Day 3 (Friday January 6):
 
-8. (8 am - 9 am) Introduction to nimbleFunctions and nimble programming
-9. (9:15 am - 10 am) Introduction to automatic differentiation (AD) (with Laplace approximation example)
-10. (10:30 am - 12 noon) nimbleFunction programming (with user-defined sampler example)
-11. (12:15 pm - 1 pm) Deeper into programming with AD
+8. (8 am - 8:45 am) Introduction to nimbleFunctions and nimble programming
+9. (9:00 am - 10 am) Introduction to automatic differentiation (AD) (with Laplace approximation example)
+10. (10:30 am - 11:45 am) nimbleFunction programming (with user-defined sampler example)
+11. (12 noon - 1 pm) Deeper into programming with AD
 
 ## Help with NIMBLE
 
