@@ -21,7 +21,7 @@ library(compareMCMCs)
 has_rjags <- require(rjags)
 if(!has_rjags)
   warning("This Rmd file uses package rjags.  Sections using it will be skipped.")
-doComparisons <- TRUE
+doComparisons <- FALSE
 ```
 
 # Overview
@@ -88,6 +88,7 @@ Four sets of model/MCMC configuration:
  2. Center the random effects (still centering length covariate): "ctrRE"
  3. Uncentered length covariate: "uncLen"
  4. Uncentered length covariate and block intercept/slope pairs: "block"
+ 5. HMC
 
 # 1.) E. cervi original MCMC 
 
@@ -105,7 +106,7 @@ cmcmc <- compileNimble(mcmc, project = model)
 system.time(DEsamples <- runMCMC(cmcmc, niter = 5000))
 
 # change to c(3,5) in live demo
-par(mfrow = c(1,5))
+par(mfrow = c(2,3))
 ts.plot(DEsamples[ , 'farm_sd'], main = 'farm sd')
 ts.plot(DEsamples[ , 'farm_effect[1]'], main = 'farm effect 1')
 ts.plot(DEsamples[ , 'sex_int[1]'], main = 'sex intercept 1')
@@ -170,7 +171,7 @@ mcmcCtrRE <- buildMCMC(mcmcConfCtrRE)
 cmcmcCtrRE <- compileNimble(mcmcCtrRE, project = modelCtrRE)
 system.time(DEsamplesCtrRE <- runMCMC(cmcmcCtrRE, niter = 5000))
 
-par(mfrow = c(1,5))
+par(mfrow = c(2,3))
 ts.plot(DEsamplesCtrRE[ , 'farm_sd'], main = 'farm sd')
 ts.plot(DEsamplesCtrRE[ , 'farm_effect[1]'], main = 'farm effect 1')
 ts.plot(DEsamplesCtrRE[ , 'mu'], main = 'intercept (random effect mean)')
@@ -203,7 +204,7 @@ mcmcUncLen <- buildMCMC(mcmcConfUncLen)
 cmcmcUncLen <- compileNimble(mcmcUncLen, project = modelUncLen)
 system.time(DEsamplesUncLen <- runMCMC(cmcmcUncLen, niter = 5000))
 
-par(mfrow = c(1,5))
+par(mfrow = c(2,3))
 ts.plot(DEsamplesUncLen[ , 'farm_sd'], main = 'farm sd')
 ts.plot(DEsamplesUncLen[ , 'farm_effect[1]'], main = 'farm effect 1')
 ts.plot(DEsamplesUncLen[ , 'sex_int[1]'], main = 'sex intercept 1')
@@ -239,7 +240,7 @@ mcmcBlock <- buildMCMC(mcmcConfBlock)
 cmcmcBlock <- compileNimble(mcmcBlock, project = modelBlock)
 system.time(DEsamplesBlock <- runMCMC(cmcmcBlock, niter = 5000))
 
-par(mfrow = c(1,5))
+par(mfrow = c(2,3))
 ts.plot(DEsamplesBlock[ , 'farm_sd'], main = 'farm sd')
 ts.plot(DEsamplesBlock[ , 'farm_effect[1]'], main = 'farm effect 1')
 ts.plot(DEsamplesBlock[ , 'sex_int[1]'], main = 'sex intercept 1')
@@ -249,13 +250,13 @@ ts.plot(DEsamplesBlock[ , 'length_coef[1]'], main = 'length slope 1')
 
 So the blocking helps a lot, though the farm effects show some oscillations. (A longer run looks fine.)
 
-# What about HMC?
+# 5) HMC
 
-Let's consider HMC. The standard advice with random effects is to use a non-centered parameterization, which basically means writing out things like $ x \sim N(mu, sigma) $ as $ x = mu + sigma * z $ for $ z \sim N(0,1)$.
+Let's consider HMC. The standard advice with random effects is to use a non-centered parameterization, which basically means writing out things like $x \sim N(\mu, \sigma)$ as $x = \mu + \sigma * z$ for $z \sim N(0,1)$.
 
-The original code did add the different terms and have mean zero random effects, so it's already using a partially non-centered parameterization. But it didn't pull out the `farm_sd` parameter.
+The original code did use non-centering in terms of the mean, so it's already using a partially non-centered parameterization. But it didn't use non-centering in terms of the `farm_sd` parameter. So we'll modify the code a bit:
 
-```{r, fig.cap='', fig.width=12, fig.height=5}
+```{r, hmc, fig.cap='', fig.width=12, fig.height=5}
 library(nimbleHMC)
 
 DEcode_hmc <- nimbleCode({
@@ -282,15 +283,15 @@ DEcode_hmc <- nimbleCode({
 })
 
 
-model <- nimbleModel(DEcode_hmc, constants = DEconstants, inits = DEinits_vals, data = DEdata, buildDerivs = TRUE)
-cmodel <- compileNimble(model)
+modelHMC <- nimbleModel(DEcode_hmc, constants = DEconstants, inits = DEinits_vals, data = DEdata, buildDerivs = TRUE)
+cmodelHMC <- compileNimble(modelHMC)
 
-hmc <- buildHMC(model)
-cHMC <- compileNimble(hmc, project = model)
+hmc <- buildHMC(modelHMC)
+cHMC <- compileNimble(hmc, project = modelHMC)
 
 system.time(DEsamplesHMC <- runMCMC(cHMC, niter = 5000, nburnin = 1000))
 
-par(mfrow = c(1,5))
+par(mfrow = c(2,3))
 ts.plot(DEsamplesHMC[ , 'farm_sd'], main = 'farm sd')
 ts.plot(DEsamplesHMC[ , 'farm_effect[1]'], main = 'farm effect 1')
 ts.plot(DEsamplesHMC[ , 'sex_int[1]'], main = 'sex intercept 1')
@@ -368,12 +369,12 @@ mcmcResults_nimble_uncLen <- compareMCMCs(
 
 ```
 
-### Call `compareMCMCs` for HMC (fewer samples) 
+### Call `compareMCMCs` for HMC (use fewer samples) 
 
 
-```{r}
-params <- model$getNodeNames(topOnly = TRUE)
-params <- params[!params %in% model$expandNodeNames('farm_effect')]
+```{r, eval=(doComparisons)}
+monitors <- model$getNodeNames(topOnly = TRUE)
+monitors <- monitors[!monitors %in% model$expandNodeNames('farm_effect')]
 
 nimbleHMCdef =
   list(nimble_HMC = function(model) {
@@ -392,13 +393,12 @@ mcmcResults_nimble_hmc <- compareMCMCs(
                    data = DEdata,
                    constants = DEconstants, 
                    inits = DEinits_vals),
-  monitors = params,
+  monitors = monitors,
   MCMCs = c('nimble_HMC'),
   nimbleMCMCdefs = nimbleHMCdef,
   MCMCcontrol = list(niter = 5000, burnin = 1000)
 )
 nimbleOptions(buildModelDerivs = FALSE)
-
 ```
 
 ### Call `compareMCMCs` for JAGS (uncentered)
@@ -421,7 +421,7 @@ mcmcResults_jags_uncLen <- compareMCMCs(
 
 ### Combine and visualize results 
 
-```{r, echo=FALSE, val=doComparisons}
+```{r, echo=FALSE, eval=doComparisons}
 mcmcResults_cenLen <- c(mcmcResults_nimble_ctrRE, mcmcResults_nimble_hmc)
 mcmcResults_uncLen <- c(mcmcResults_nimble_uncLen, 
                  mcmcResults_jags_uncLen) ## These are lists of MCMCresult objects
@@ -444,9 +444,9 @@ make_MCMC_comparison_pages(mcmcResults_uncLen, modelName = "deer_ecervi_uncLen_r
 
 ### Results 
 
-Results that come with these slides are [here for uncentered length covariate](orig_deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](orig_deer_ecervi_ctrRE_results.html).
+Results that come with these slides are [here for uncentered length covariate](orig_deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](orig_deer_ecervi_cenLen_results.html).
 
-Results if you run the code yourself will be [here for uncentered length covariate](deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](deer_ecervi_ctrRE_results.html).
+Results if you run the code yourself will be [here for uncentered length covariate](deer_ecervi_uncLen_results.html) and [here for the centered random effects (and centered length covariate) plus HMC](deer_ecervi_cenLen_results.html).
 
 Note that results will vary by machine and (e.g., for HMC) will vary with the implementation in particular software. Here, HMC didn't perform well after accounting for computational time because of how long the HMC iterations take. Results in Stan might be better as Stan's derivative calculations are somewhat faster than NIMBLE's.
 

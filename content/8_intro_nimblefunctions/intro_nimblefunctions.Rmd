@@ -204,8 +204,8 @@ It's not all that helpful in this small example, but one can provide a gradient 
 objective_with_grad <- nimbleFunction(
     setup = function(model, nodes) {
         calcNodes <- model$getDependencies(nodes, self = FALSE)
-        # elements <- model$expandNodeNames(nodes, returnScalarComponents = TRUE)
-        # n <- length(elements)
+        elements <- model$expandNodeNames(nodes, returnScalarComponents = TRUE)
+        n <- length(elements)
         
         # Set up the additional arguments for nimDerivs when the function
         #   called includes model$calculate
@@ -216,8 +216,8 @@ objective_with_grad <- nimbleFunction(
     methods = list(
         fun = function(par = double(1)) {
              returnType(double(0))
-             # if(length(par) != n)
-             #    stop("Input length does not match number of parameter elements.")
+             if(length(par) != n)
+                stop("Input length does not match number of parameter elements.")
              values(model, nodes) <<- par   # assignment into non-local (nf) variables
              ans <- model$calculate(calcNodes)  # local assignment
              return(ans)
@@ -234,17 +234,20 @@ objective_with_grad <- nimbleFunction(
 ```
 
 
-```{r, regr-specialized}
+```{r, regr-specialized-grad}
 rObjective <- objective_with_grad(regrModel, c('b0', 'b1', 'sigma'))
 cObjective <- compileNimble(rObjective, project = regrModel)
 ```
 
 Now let's try using it. We need to use a derivative-based optimization algorithm such as the BFGS (Newton-like) method rather than a derivative-free method like Nelder-Mead.
 
-```{r, regr-optimize}
+```{r, regr-optimize-grad}
 set.seed(1)
+origWarn <- options()$warn
+options(warn = -1)   ## turn off the warnings to keep the output cleaner
 system.time(optR <- optim(c(0, 0, 1), rObjective$fun, gr = rObjective$grad,
                  method = "BFGS", control = list(fnscale = -1)))
+options(warn = origWarn)
 system.time(optC <- optim(c(0, 0, 1), cObjective$fun, gr = cObjective$grad,
                  method = "BFGS", control = list(fnscale = -1)))
 optR

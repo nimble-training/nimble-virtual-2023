@@ -68,6 +68,7 @@ Marginalization:
 One-at-a-time vs. block sampling: sample $x$ as a vector or sample $x_i|x_{-i}$ for $i=1,\ldots,N$?
 
   - Joint sampling requires ways to make reasonable vector proposals.
+       - HMC may work well.
   - One-at-a-time sampling simpler, but $x_{-i}$ values constrain proposals for $x_i$.
        - Most problematic when $x$ is smooth spatially as the constraints are stronger.
 
@@ -81,18 +82,16 @@ One-at-a-time vs. block sampling: sample $x$ as a vector or sample $x_i|x_{-i}$ 
      - Stan provides capability for this:
         - `https://mc-stan.org/users/documentation/case-studies/icar_stan.html`
         - `https://osf.io/3ey65/`
-     - HMC may work better for block sampling than block Metropolis
-  - Future plans to allow for specifying joint distribution of $x$ with sparse precision matrix and block sampling
-
+     - HMC may work better for joint sampling than block Metropolis
 
 
 ### Gaussian process and other continuous models:
 
-  - No built-in functionality except MVN distribution
+  - No built-in functionality -- just use MVN distribution
   - Generally done as a vector node
   - User-defined functions and distributions
   - Generally use block sampling
-     - HMC may work better for block sampling than block Metropolis (and remember the uncentered parameterization)
+     - HMC may work better for joint sampling than block Metropolis (and remember the uncentered parameterization)
 
 ### Spline models for $x$:
 
@@ -404,7 +403,7 @@ x[1:N] ~ dmnorm(mu[1:N], cov = cov[1:N, 1:N])
 
 Sometimes researchers use a Gaussian process for areal data, evaluating the process values at the centroids of the areas.
 
-More commonly the Gaussian process would we used for continuous data or applied to regularly-gridded data.
+More commonly the Gaussian process would be used for continuous data or applied to regularly-gridded data.
 
 For simplicity, let's apply the Gaussian process to the same example we used for the CAR model.
 
@@ -448,24 +447,24 @@ cModel <- compileNimble(model)
 
 # Running an MCMC
 
-```{r}
+```{r, fig.height=5}
 conf <- configureMCMC(model, enableWAIC = TRUE)
 conf$addMonitors('x')
 
 MCMC <- buildMCMC(conf)
 cMCMC <- compileNimble(MCMC, project = cModel) 
-system.time(output <- runMCMC(cMCMC, niter = 30000, nburnin = 5000, thin = 25, WAIC = TRUE))
+system.time(output <- runMCMC(cMCMC, niter = 60000, nburnin = 10000, thin = 50, WAIC = TRUE))
 samples <- output$samples
 waic_gp <- output$WAIC
 ```
 
-Note that mixing in this model is somewhat slow, because of the need to explore the correlated spatial process, `x`, which is generally more difficult in non-conjugate settings, such as this one, where the observations are Poisson and the prior for the latent process is normal.
+Before we look at the results, let's also try HMC.
 
 # Trying HMC
 
 We'll also try HMC, since it often does well in problems with a complicated dependence structure (at least on a per iteration basis). We'll need to modify `expcov` to allow for derivatives.
 
-```{r}
+```{r, fig.height=5}
 expcov <- nimbleFunction(     
   run = function(dists = double(2), rho = double(0), sigma = double(0)) {
     returnType(double(2))
@@ -517,14 +516,15 @@ cHMC <- compileNimble(hmc, project = model)
 system.time(samplesHMC <- runMCMC(cHMC, niter = 1500, nburnin = 750))
 ```
 
-That takes a while, which may in part be because of some room for improvement in NIMBLE's AD efficiency with linear algebra calculations.
+That takes a while, in part be because of some room for improvement in NIMBLE's AD efficiency with linear algebra calculations.
 Stan is a bit more than twice as fast in this case.
 
 # Results
 
-MCMC mixing could be better (often the case for spatial models), but is not terrible. We'd want to run for longer.
 
-```{r, fig.cap='', fig.width=10, fig.height=12}
+Note that mixing in this model is somewhat slow (often the case for spatial models), but is not terrible. The slow mixing is because of the need to explore the correlated spatial process, `x`, which is generally more difficult in non-conjugate settings, such as this one, where the observations are Poisson and the prior for the latent process is normal.
+
+```{r, fig.cap='', fig.width=10, fig.height=7}
 par(mfrow = c(2,3))
 ts.plot(samples[ , 'rho'], main = 'rho')
 ts.plot(samples[ , 'sigma'], main = 'sigma')
@@ -532,8 +532,9 @@ ts.plot(samples[ , 'beta'], main = 'beta')
 ts.plot(samplesHMC[ , 'rho'], main = 'rho')
 ts.plot(samplesHMC[ , 'sigma'], main = 'sigma')
 ts.plot(samplesHMC[ , 'beta'], main = 'beta')
-
-
+```
+```{r, fig.cap='', fig.width=10, fig.height=7}
+par(mfrow = c(2,3))
 ts.plot(samples[ , 'x[5]'], main = 'x[5]')
 ts.plot(samples[ , 'x[50]'], main = 'x[50]')
 ts.plot(samples[ , 'x[100]'], main = 'x[100]')
@@ -576,7 +577,7 @@ Finally, we might explore use of the AFSS or elliptical slice samplers for `x[1:
 
 # Prediction at unobserved locations
 
-It's best to sample unobserved locations "offline", namely separately after the MCMC.
+In some cases it may be faster to sample unobserved locations "offline", namely separately after the MCMC (e.g., when intensive linear algebra computations are needed)
 
 We'd need:
  
@@ -585,7 +586,7 @@ We'd need:
  
  Could be done in R or, for larger problems, in a nimbleFunction that is compiled for speed, pulling the draws from the MCMC's `mvSamples` data structure and inserting into the model with `values(model, nodes) <- `.
  
-This is the exercise at the end of the module. Use of nimbleFunctions for similar post hoc processing is part of Module 9b.
+This is the exercise at the end of the module. Use of nimbleFunctions for similar post hoc processing is part of Module 10.
 
 # Large spatial models and spatial nonstationarity
 
@@ -693,7 +694,7 @@ ts.plot(samplesS[ , 'x[50]'], main = 'x[50]')
 ts.plot(samplesS[ , 'x[100]'], main = 'x[100]')
 ```
 
-Here are the spatial estimates. Pretty different than the CAR or GP results. We might want to explore larger values of K.
+Here are the spatial estimates. Pretty different (much smoother) than the CAR or GP results. We might want to explore larger values of K.
 
 ```{r, fig.cap='', fig.width=12, fig.height=7}
 xCols <- grep('^x\\[', colnames(samplesS))
@@ -759,6 +760,7 @@ Interpreting the numerical values:
   - AIC penalizes the log-likelihood by two when adding a parameter, to give a sense for the scale of things. 
   
 Caveats:
+
   - These are based on MCMC runs that are likely too short.
   - Not clear how appropriate basic WAIC is for correlated data.
   
@@ -848,7 +850,7 @@ xstar_samples2 <- cget_samples(samples, constants$z, zNew, dist11, dist22, dist2
 
 We could also write this to use the `mvSamples` modelValues object that stores all the MCMC output instead of using the R matrix representation of the samples.
 
-We'll see various approaches to post hoc processing in Module 9b.
+We'll see various approaches to post hoc processing in Module 10.
 
 # Appendix: using JAGS instead (for the spline-based model)
 

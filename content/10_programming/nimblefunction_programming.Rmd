@@ -34,7 +34,8 @@ generate_orig_results <- FALSE
     b. Setting up a new sampler: A simple Metropolis-Hastings example
     c. Worked example: sampler that jointly updates intercepts and random effects in the E. cervi example.
 3. modelValues for storing values from a model
-4. nimbleFunctions for post-processing: Worked example: posterior predictive checks
+4. nimbleFunctions for post-processing:
+    - Worked example: posterior predictive checks
 5. Calling out to R and C++ from nimbleFunctions
 
 
@@ -218,7 +219,7 @@ A user wrote to nimble-users recently asking how to do MCMC sampling on subsets 
 
 Unfortunately, `nimble` is not set up to do this. The user took our basic RW sampler and modified it for his need.
 
-Let's suppose we have this basic model with a node, say `y[1:3]` and `y[2]` is missing.
+Let's suppose we have this basic model with a node, say `y[1:3]`, where `y[2]` is missing.
 
 `nimble` easily handles nodes that are missing (assigning an MCMC sampler to them) but not multivariate nodes that are a mix of missing and non-missing. But we can work around that. 
 
