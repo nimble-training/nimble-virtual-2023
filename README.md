@@ -81,7 +81,7 @@ cModel <- compileNimble(model)
 
 If that runs without error, you're all set. If not, please see the troubleshooting tips and email nimble.stats@gmail.com directly if you can't get things going.  
 
-In general we encourage you to update to the most recent version of NIMBLE, 0.11.0.
+In general we encourage you to update to the most recent version of NIMBLE, 0.13.1.
 
 
 #### (Required) Development version(s) of NIMBLE
