@@ -561,7 +561,7 @@ Multivariate random-walk Metropolis-Hastings samplers
     - Some parameters might share the same calculations.
     - Some parameters might require different calculations, in which case the block sampler will need to calculate their union.
 
-- January not work well when the scale of interest for different dimensions is very different.
+- May not work well when the scale of interest for different dimensions is very different.
 
     - nimble generates a message about this.
 
