@@ -124,7 +124,7 @@ Here are the modules we'll work through for this short course.
 
  - Day 2
 
-    - [5. User-defined distributions and functions](content/5_user_defined/user_defined.html) 
+    - [5. User-defined distributions and functions](content/5_user_defined/extending_models.html) 
     - [6. Spatial modeling](content/6_spatial_models/spatial_models.html)
     - [7. Ecological modeling](content/7_ecological_models/ecological_models_part1.html)
 
