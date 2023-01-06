@@ -80,10 +80,10 @@ Steps to compute $\frac{dy}{dx}$ (using chain rule): *Reverse mode*, i.e. outer 
 
 # NIMBLE adopts the CppAD C++ library for AD 
 
-* Huge credit to [<span style="color:blue">CppAD</span>](https://coin-or.github.io/CppAD/html/CppAD.html).
+* Huge credit to [<span style="color:blue">CppAD</span>](https://coin-or.github.io/CppAD/doc/cppad.htm)
 * Written by Brad Bell at the University of Washington.
-* CppAD is also used by Template Model Builder (TMB).
-* CppAD is general and efficient.
+* CppAD is also used by [<span style="color:blue">Template Model Builder (TMB)</span>](https://kaskr.github.io/adcomp/Introduction.html).
+* CppAD is general and efficient.  It can provide arbitrary-order derivatives.
 * We have written some specialized handling for some cases ("atomic" operators, in CppAD terminology).
 * CppAD can trace derivatives through arbitrary function calls.
 * NIMBLE's use of CppAD involves deep changes in everything, not just calling a few extra functions.

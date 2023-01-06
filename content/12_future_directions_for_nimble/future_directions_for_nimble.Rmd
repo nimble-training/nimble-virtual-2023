@@ -19,31 +19,6 @@ slides > slide {
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Automatic differentiation
-=====
-
-### Ways to get derivatives on a computer:
-- finite element approximation: `(f(x + epsilon) - f(x)) / epsilon`
-- symbolic (maybe from computer algebra): `(d/dx) exp(ax) = a* exp(ax)`
-- AD: algorithmic or automatic differentiation: use new versions of "a", "x", and "exp" to track derivative information through `exp(ax)`.
-
-### Successful uses of AD in statistical software:
-
-- ADMB, which grew into TMB, which uses AD via CppAD package.
-- Stan has its own AD system.
-
-### NIMBLE plan:
-
-- Code-generate C++ for CppAD.
-    - This is largely built but involves a lot of code infrastructure.
-- The gives us access to multiple orders of derivatives
-- We plan to implement
-    - Hamiltonian Monte Carlo: It works!
-    - Langevin sampler: It works!
-    - Laplace approximation: It works!
-    - Caveat: These are all complex methods and there is still some testing, debugging, and efficiency improvement to do.
-- Capability to access derivatives for "arbitrary" (within sense) nimbleFunctions and for subsets of model calculations will enable a lot of flexible algorithm development.
-
 nCompiler
 =====
 
@@ -61,6 +36,10 @@ We are re-designing the "NIMBLE compiler" from the ground up with some of the fo
 - Support automatic differentiation natively
 - Generate R and C++ code into R package structure.
 - Swap into NIMBLE in place of the current "NIMBLE compiler."
+
+Redesigned model internals
+=====
+We are working to make various aspects of model processing more efficient and scalable.
 
 Greater capability for domain-application packages
 =====

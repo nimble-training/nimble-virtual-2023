@@ -12,7 +12,7 @@
 <meta name="author" content="NIMBLE Development Team" />
 
 
-<title>NIMBLE 2023 Virtual Workshop Overview</title>
+<title>Ecological models in NIMBLE</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -208,83 +208,6 @@ window.buildTabsets = function(tocID) {
 };
 
 </script>
-<script>
-window.initializeCodeFolding = function(show) {
-
-  // handlers for show-all and hide all
-  $("#rmd-show-all-code").click(function() {
-    $('div.r-code-collapse').each(function() {
-      $(this).collapse('show');
-    });
-  });
-  $("#rmd-hide-all-code").click(function() {
-    $('div.r-code-collapse').each(function() {
-      $(this).collapse('hide');
-    });
-  });
-
-  // index for unique code element ids
-  var currentIndex = 1;
-
-  // select all R code blocks
-  var rCodeBlocks = $('pre.r, pre.python, pre.bash, pre.sql, pre.cpp, pre.stan, pre.julia, pre.foldable');
-  rCodeBlocks.each(function() {
-    // skip if the block has fold-none class
-    if ($(this).hasClass('fold-none')) return;
-
-    // create a collapsable div to wrap the code in
-    var div = $('<div class="collapse r-code-collapse"></div>');
-    var showThis = (show || $(this).hasClass('fold-show')) && !$(this).hasClass('fold-hide');
-    var id = 'rcode-643E0F36' + currentIndex++;
-    div.attr('id', id);
-    $(this).before(div);
-    $(this).detach().appendTo(div);
-
-    // add a show code button right above
-    var showCodeText = $('<span>' + (showThis ? 'Hide' : 'Code') + '</span>');
-    var showCodeButton = $('<button type="button" class="btn btn-default btn-xs btn-secondary btn-sm code-folding-btn pull-right float-right"></button>');
-    showCodeButton.append(showCodeText);
-    showCodeButton
-        .attr('data-toggle', 'collapse')
-        .attr('data-bs-toggle', 'collapse') // BS5
-        .attr('data-target', '#' + id)
-        .attr('data-bs-target', '#' + id)   // BS5
-        .attr('aria-expanded', showThis)
-        .attr('aria-controls', id);
-
-    var buttonRow = $('<div class="row"></div>');
-    var buttonCol = $('<div class="col-md-12"></div>');
-
-    buttonCol.append(showCodeButton);
-    buttonRow.append(buttonCol);
-
-    div.before(buttonRow);
-
-    // show the div if necessary
-    if (showThis) div.collapse('show');
-
-    // update state of button on show/hide
-    //   * Change text
-    //   * add a class for intermediate states styling
-    div.on('hide.bs.collapse', function () {
-      showCodeText.text('Code');
-      showCodeButton.addClass('btn-collapsing');
-    });
-    div.on('hidden.bs.collapse', function () {
-      showCodeButton.removeClass('btn-collapsing');
-    });
-    div.on('show.bs.collapse', function () {
-      showCodeText.text('Hide');
-      showCodeButton.addClass('btn-expanding');
-    });
-    div.on('shown.bs.collapse', function () {
-      showCodeButton.removeClass('btn-expanding');
-    });
-
-  });
-
-}
-</script>
 <style type="text/css">.hljs-literal {
 color: #990073;
 }
@@ -421,9 +344,6 @@ pre code {
 </style>
 
 <!-- code folding -->
-<style type="text/css">
-.code-folding-btn { margin-bottom: 4px; }
-</style>
 
 
 
@@ -440,17 +360,9 @@ pre code {
 
 <div id="header">
 
-<div class="btn-group pull-right float-right">
-<button type="button" class="btn btn-default btn-xs btn-secondary btn-sm dropdown-toggle" data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
-<ul class="dropdown-menu dropdown-menu-right" style="min-width: 50px;">
-<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
-<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
-</ul>
-</div>
 
 
-
-<h1 class="title toc-ignore">NIMBLE 2023 Virtual Workshop Overview</h1>
+<h1 class="title toc-ignore">Ecological models in NIMBLE</h1>
 <h3 class="subtitle">NIMBLE 2023 Virtual Workshop</h3>
 <h4 class="author">NIMBLE Development Team</h4>
 <h4 class="date">January 2023</h4>
@@ -458,190 +370,20 @@ pre code {
 </div>
 
 
-<style>
-slides > slide {
-  overflow-x: auto !important;
-  overflow-y: auto !important;
-}
-</style>
-<div id="a-few-administrative-things" class="section level1">
-<h1>A few administrative things</h1>
-<div id="where-to-find-stuff" class="section level2">
-<h2>Where to find stuff</h2>
-<p>The GitHub site (<a href="https://github.com/nimble-training/nimble-virtual-2023">https://github.com/nimble-training/nimble-virtual-2023</a>)
-is the main repository for materials for the modules; you can also get
-the individual files from GitHub.</p>
-<p>If you’re not familiar with Git, you can get these materials by
-simply going to <a href="https://github.com/nimble-training/nimble-virtual-2023">https://github.com/nimble-training/nimble-virtual-2023</a>
-and click on the ‘Download ZIP’ button in the right side of the window
-or simply click <a href="https://github.com/nimble-training/nimble-virtual-2023/archive/main.zip">here</a>.
-See also slide 6 in this document for how to get them using Git or from
-within RStudio.</p>
-</div>
-<div id="asking-questions-and-making-comments" class="section level2">
-<h2>Asking questions and making comments</h2>
-<p>Please ask questions and make comments as we go through the
-material.</p>
-</div>
-</div>
-<div id="how-well-operate" class="section level1">
-<h1>How we’ll operate</h1>
-<p>The workshop will be organized in modules, each of which will be a
-combination of lecture/demo presentation.</p>
-</div>
-<div id="suggestions-on-how-to-get-the-most-out-of-the-workshop" class="section level1">
-<h1>Suggestions on how to get the most out of the workshop</h1>
-<p>We encourage you to:</p>
-<ul>
-<li>try out the code as we walk through it</li>
-<li>keep your eyes open! – We’ll illustrate a lot of syntax and concepts
-by example</li>
-<li>try to guess what the syntax means in cases we haven’t yet seen that
-syntax</li>
-<li>play with it and try variations and try to break it and see what
-happens</li>
-<li>post a comment on Slack or the Zoom chat if something interesting
-happens as you experiment</li>
-<li>ask questions!</li>
-</ul>
-<p>A few additional thoughts on my pedagogical philosophy here:</p>
-<ul>
-<li>We want to expose you to a lot of tools and ideas that you can come
-back to when you need them and when you have time for more depth.</li>
-<li>Our aim is not to show you how to use specific statistical methods
-or analysis techniques. Our goal is to get you up to speed generally in
-NIMBLE.</li>
-<li>It can be hard to absorb everything in such a concentrated
-situation. Hopefully the material presented will be useful to you over
-the longer-term as you do more work with NIMBLE.</li>
-</ul>
-</div>
-<div id="rstudio-and-r-markdown" class="section level1">
-<h1>RStudio and R Markdown</h1>
-<p>We’ll present most of the material from within RStudio, using R
-Markdown documents with embedded R code. R Markdown is an extension to
-the Markdown markup language that makes it easy to write HTML in a
-simple plain text format. This allows us to both run the R/NIMBLE code
-directly as well as compile on-the-fly to an HTML file that can be used
-for presentation. All files will be available on <a href="https://github.com/nimble-training/nimble-virtual-2023">GitHub</a>.</p>
-<p>Note: The files named <em>foo.html</em> have individual slides, while
-the files named <em>foo_alt.html</em> have the same content but all on
-one page.</p>
-<p>Warning: in some cases the processing of the R code in the R Markdown
-is screwy and the slides have error messages that do not occur if you
-just run the code directly in R or RStudio.</p>
-</div>
-<div id="getting-the-workshop-materials" class="section level1">
-<h1>Getting the workshop materials</h1>
-<p>To download the files, you can do any of the following.</p>
-<div id="from-a-browser" class="section level2">
-<h2>From a browser</h2>
-<p>Simply go to <a href="https://github.com/nimble-training/nimble-virtual-2023">https://github.com/nimble-training/nimble-virtual-2023</a>
-and click on the ‘Download ZIP’ button in the right side of the window
-or simply click <a href="https://github.com/nimble-training/nimble-virtual-2023/archive/main.zip">here</a>.</p>
-</div>
-<div id="within-rstudio" class="section level2">
-<h2>Within RStudio</h2>
-<p>Within RStudio go to File-&gt;New Project-&gt;Version Control-&gt;Git
-and enter:</p>
-<ul>
-<li>“Repository URL”: <a href="https://github.com/nimble-training/nimble-virtual-2023" class="uri">https://github.com/nimble-training/nimble-virtual-2023</a></li>
-<li>“Project Directory Name”: nimble-virtual-2023 (or something else of
-your choosing)</li>
-<li>“Directory”: ~/Desktop (or somewhere of your choosing)</li>
-</ul>
-<p>Then to update from the repository to get any changes we’ve made, you
-can select (from within RStudio): Tools-&gt;Version Control-&gt;Pull
-Branches</p>
-<p>or from the Environment/History/Git window, click on the Git tab and
-then on the blue down arrow.</p>
-<p>Be warned that you probably do not want to make your own notes or
-changes to the files we are providing. Because if you do, and you then
-do a “Git Pull” to update the materials, you’ll have to deal with the
-conflict between your local version and our version. You probably will
-want to make a personal copy of such files in another directory or by
-making copies of files with new names.</p>
-</div>
-<div id="from-a-terminal-window" class="section level2">
-<h2>From a terminal window</h2>
-<p>Run the following commands:</p>
-<ul>
-<li><code>cd /directory/where/you/want/repository/located</code></li>
-<li><code>git clone https://github.com/nimble-training/nimble-virtual-2023</code></li>
-</ul>
-<p>Then to update from the repository to get any changes we’ve made:</p>
-<ul>
-<li><code>cd /directory/where/you/put/the/repository/nimble-virtual-2023</code></li>
-<li><code>git pull</code></li>
-</ul>
-</div>
-</div>
-<div id="installing-nimble" class="section level1">
-<h1>Installing NIMBLE</h1>
-<p>NIMBLE is on CRAN, so in general it will be straightforward to
-install, but you do need a compiler and related tools on your
-system.</p>
-<p>In summary, here are the steps.</p>
 <ol style="list-style-type: decimal">
-<li>Install compiler tools on your system. <a href="https://r-nimble.org/download">https://r-nimble.org/download</a>
-has more details on how to install <em>Rtools</em> on Windows and how to
-install the command line tools of <em>Xcode</em> on a Mac.</li>
-<li>Install the <em>nimble</em> package from CRAN.</li>
+<li><a href="ecological_models_part1_CJS.html">Part 1: Capture-recapture
+(Cormack-Jolly-Seber)</a></li>
+<li><a href="ecological_models_part2_HMM.html">Part 2: Hidden Markov
+models (HMMs)</a></li>
+<li><a href="ecological_models_part3_occupancy.html">Part 3: Occupancy
+models</a></li>
+<li><a href="ecological_models_part4_ZIPNmixture.html">Part 4: N-mixture
+models</a></li>
+<li><a href="ecological_models_part5_SCR.html">Part 5: Spatial
+capture-recapture models</a></li>
+<li><a href="nimble_ecological_examples.pdf">Some key results from some
+papers</a></li>
 </ol>
-<p>More details can also be found in Section 4 of the <a href="https://r-nimble.org/html_manual/cha-installing-nimble.html">NIMBLE
-manual</a>.</p>
-</div>
-<div id="the-legal-stuff" class="section level1">
-<h1>The Legal Stuff</h1>
-<ul>
-<li><p>This material was created by the NIMBLE development team and is
-licensed under a Creative Commons Attribution 3.0 Unported License. You
-are free to use, modify, and redistribute any of this material with
-attribution.</p></li>
-<li><p>NIMBLE is/has been supported by NSF grants DBI-1147230,
-ACI-1550488, and DMS-1622444, with additional support provided by
-postdoctoral funding for D. Turek from the Berkeley Institute for Data
-Science and Google Summer of Code fellowships for N. Michaud (2015) and
-C. Lewis-Beck (2017).</p></li>
-</ul>
-</div>
-<div id="outline" class="section level1">
-<h1>Outline</h1>
-<p>Here are the modules we’ll work through for this short course.</p>
-<ul>
-<li><p>Day 1</p>
-<ul>
-<li><a href="content/1_introduction_to_nimble/introduction_to_nimble.html">1.
-Introduction to NIMBLE</a></li>
-<li><a href="content/2_nimble_models/nimble_models.html">2. Models in
-NIMBLE</a></li>
-<li><a href="content/3_comparing_and_customizing_mcmc/comparing_and_customizing_mcmc.html">3.
-Comparing and customizing MCMC</a></li>
-<li><a href="content/4_improving_mcmc/improving_mcmc.html">4. Improving
-MCMC</a></li>
-</ul></li>
-<li><p>Day 2</p>
-<ul>
-<li><a href="content/5_user_defined/extending_models.html">5.
-User-defined distributions and functions</a></li>
-<li><a href="content/6_spatial_models/spatial_models.html">6. Spatial
-modeling</a></li>
-<li><a href="content/7_ecological_models/ecological_models_overview.html">7.
-Ecological modeling</a></li>
-</ul></li>
-<li><p>Day 3</p>
-<ul>
-<li><a href="content/8_intro_nimblefunctions/intro_nimblefunctions.html">8.
-Basic programming in NIMBLE</a></li>
-<li><a href="content/9_ad/intro_ad.html">9. Automatic differentiation,
-including Laplace approximation</a></li>
-<li><a href="content/10_programming/nimblefunction_programming.html">10.
-Programming in NIMBLE</a></li>
-<li><a href="content/11_ad_programming/ad_programming.html">11.
-Programming with automatic differentiation</a></li>
-</ul></li>
-</ul>
-</div>
 
 
 
@@ -676,11 +418,6 @@ $(document).ready(function () {
 </script>
 
 <!-- code folding -->
-<script>
-$(document).ready(function () {
-  window.initializeCodeFolding("show" === "show");
-});
-</script>
 
 
 <!-- dynamically load mathjax for compatibility with self-contained -->

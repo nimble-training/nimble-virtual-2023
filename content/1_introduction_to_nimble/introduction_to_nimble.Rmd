@@ -174,7 +174,7 @@ GLMM Example: 3. Compile the model and MCMC.
 This can be done in one step or two.  We'll use two.
 
 ```{r}
-cDEmodel <- compileNimble(DEmodel) 
+cDEmodel <- compileNimble(DEmodel)
 # First call to compileNimble in a session is slower than later calls.
 cDEmcmc <- compileNimble(DEmcmc, project = DEmodel)
 ```

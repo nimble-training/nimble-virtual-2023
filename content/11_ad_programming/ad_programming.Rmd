@@ -37,6 +37,8 @@ eval <- TRUE
 - Generic parameter transformations
 - Double-taping for potential efficiency
 
+Note: For `a^b`, if `b` will always be an integer, use `pow_int(a, b)` instead of `pow(a,b)` (which is identical to `a^b`).  If `b` is a hard-coded integer, `pow_int` will be used automatically.
+
 # When values are "baked in" to AD tapes
 
 If a variable is not subject to derivative-tracking, its value will enter the AD tape during recording and can't be changed until the tape is reset.
@@ -131,6 +133,8 @@ Cnf2obj$derivs_foo(2.5) ## CORRECT
 
 We may want to include `c` as an argument but gain efficiency by never tracking derivatives through it if we don't need to.
 
+We will illustrate two ways to do this, using $c = c_1 c_2$ so there are two constants to ignore for derivative tracking.
+
 ```{r, eval=eval}
 nf3 <- nimbleFunction(
   setup = TRUE,
@@ -185,13 +189,12 @@ nf4 <- nimbleFunction(
     foo = function(x = double(),
                    p = double(),
                    half = logical()) { # Will be an integer, but say I use double()
+      ans <- 1
       if(!half) {
-        ans <- x
         for(i in 1:p) {
           ans <- ans*x
         }  
       } else {
-        ans <- 0.5*x
         for(i in 1:p) {
           ans <- ans*(0.5*x)
         }
@@ -232,7 +235,12 @@ Cnf4obj$derivs_foo(2.5, 4, TRUE) # CORRECT: with p=4 and half=TRUE
 
 # More about using AD with models
 
-- When recording a tape using a model, all values that will be used need to be copied (internally) from the regular model to the AD model.  You  need to provide information about which nodes are needed, in two categories: `constantNodes` (not the same as `constants` in `nimbleModel`) and `updateNodes`.
+- When recording a tape using a model, all values that will be used need to be copied (internally) from the regular model to the AD model.  
+
+- You  need to provide information about which nodes are needed, in two categories: `constantNodes` (not the same as `constants` in `nimbleModel`) and `updateNodes`.
+
+- The function `makeDerivsInfo()` can determine these for you for most cases.
+
 - When using a tape recorded with a model, one can update values that might have changed (without resetting the tape).
 
 Let's look at an example (simple model used earlier):
@@ -252,7 +260,8 @@ model_code <- nimbleCode({
 - Say we will want derivative(s) of `model$calculate('mu', 'y')` with respect to `slope`.
 - Values needed: `y`, `intercept`, `slope`, `x`, and `sigma`.
 - Values that might **not** change between derivative calls: `y`, `x`.  These are **constantNodes**.
-- Values that might change between derivative calls: `intercept`, `slope`, `sigma`. These are **updateNodes**.
+- Values that might change between derivative calls: `intercept` and `sigma`. These are **updateNodes**.
+- `slope` does not need to be in `updateNodes` because the "recorded" function will assign new value into the model.
 
 # More about using AD with models (cont.)
 
@@ -283,7 +292,7 @@ nf5 <- nimbleFunction(
   setup = function(model) {
     calc_nodes <- c('mu', 'y') # Normally, use model-generic programming, not hand-coded nodes
     constantNodes <- c('y','x')
-    updateNodes <- c('slope','intercept','sigma')
+    updateNodes <- c('intercept','sigma')
     param <- 'slope'
   },
   run = function(slope = double()) {
@@ -344,15 +353,116 @@ Cnf5obj$derivs_run(slope=0.8) # ERROR: old value of y is baked into tape
 Cnf5obj$derivs_run(slope=0.8, reset=TRUE) # CORRECT
 ```
 
+# More about using AD with models (cont.)
+
+This example illustrated `constantNodes` and `updateNodes` manually. In practice, `makeDerivsInfo` will do a good job of determining these.
+
+```{r}
+# Normally, use model-generic programming methods to determine calcNodes
+makeDerivsInfo(m, wrtNodes = 'slope', calcNodes = c('mu','y'))
+```
+
+Here is how we would use this in a `nimbleFunction`.
+
+```{r, eval=eval}
+nf5b <- nimbleFunction(
+  setup = function(model) {
+    param <- 'slope'
+    calc_nodes <- c('mu', 'y') # Normally, use model-generic programming, not hand-coded nodes
+    # For a more general nimbleFunction,
+    # make param and/or calc_nodes be arguments
+    derivsInfo <- makeDerivsInfo(model, param, calc_nodes)
+    constantNodes <- derivsInfo$constantNodes
+    updateNodes <- derivsInfo$updateNodes
+  },
+  run = function(slope = double()) {
+    temp <- numeric(value = slope, length = 1)
+    values(model, param) <<- temp # c(slope) makes a scalar into a vector
+    log_prob <- model$calculate(calc_nodes)
+    return(log_prob)
+    returnType(double())
+  },
+  methods = list(
+    derivs_run = function(slope = double(),
+                          reset = logical(0, default=FALSE)) {
+      wrt <- numeric(length = 1, value = 1) # indices, not names
+      ans <- derivs(run(slope), wrt = wrt,
+                    order = 0:1,
+                    updateNodes = updateNodes,
+                    constantNodes = constantNodes,
+                    model = model,
+                    reset = reset)
+      return(ans)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = 'run'
+)
+```
+
+```{r, eval=eval}
+nf5bobj <- nf5b(m)
+# Run it once uncompiled to be sure there isn't a silly typo.
+nf5bobj$derivs_run(0.8)
+# This should work identically to nf5obj above.
+```
+
 # Using AD in user-defined functions and distributions
 
 Simply add `buildDerivs=TRUE` to the `nimbleFunction` for the user-defined function or distribution.
 
 (Or `buildDerivs = list(run = list(ignore = c('param1','param2')))` to leave `param1` and `param2` out of derivative tracking.)
 
-# Using `makeDerivsInfo` to determine `constantNodes` and `updateNodes`
+# Double-taping of derivatives
 
-TBD
+We can record derivatives of the playing of an AD tape.
+
+Let's consider `exp(x^4)` to be a bit more interesting.
+
+```{r, eval=eval}
+nf6 <- nimbleFunction(
+  # Setup argument c will become member data of a C++ class.
+  # It will not have derivative-tracking.
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(x^4))
+      returnType(double())
+    },
+    gradient_foo = function(x=double(),
+                            reset = logical(0, default=FALSE)) {
+      d <- derivs(foo(x), wrt = 1, order = 1, reset = reset)
+      g <- d$jacobian[1,]
+      return(g)
+      returnType(double(1))
+    },
+    derivs_gradient_foo = function(x = double(),
+                                   order = integer(1),
+                                   reset = logical(0, default=FALSE)) {
+      d <- derivs(gradient_foo(x=x, reset=reset),
+                  wrt = 1,
+                  order = order,
+                  reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = c('foo', 'gradient_foo')
+)
+```
+
+# Double-taping of derivatives (cont).
+
+```{r, eval=eval}
+nf6obj <- nf6()
+cnf6obj <- compileNimble(nf6obj)
+cnf6obj$gradient_foo(.8)
+cnf6obj$derivs_gradient_foo(.8, order = 0:2)
+```
+
+# Double-taping of derivatives (cont).
+
+When double-taping with `model$calculate` being taped, the `model`, `constantNodes` and `updatedNodes` need to be provided at the outer-most `derivs` call (and could be provided in the inner calls too).
 
 # Generic parameter transformations
 
@@ -360,4 +470,141 @@ It is often useful to let algorithms operate on unconstrained parameter spaces. 
 
 In the AD beta-release, we provide a generic parameter transformation system.  It is motivated by AD use cases and supports derivative tracking, but it can be used for any purpose.
 
-To be continued...
+# Generic parameter transformations
+
+Here is an silly toy model with some constrained parameters (and no data):
+
+```{r, eval=eval}
+toy <- nimbleModel(nimbleCode({
+  a ~ dgamma(shape = 2, rate = 1)  # a >= 0
+  b ~ dunif(10, 30)                # 10 <= b <= 20
+  y ~ dnorm(b, sd = 5) 
+  alpha[1:5] <- c(3, 6, 7, 6, 3)
+  c[1:5] ~ ddirch( alpha[1:5] )    # sum(c) == 1
+}), data = list(y = 15))
+```
+
+Say we want to optimize with respect to `(a, b, c[1:5])`.
+
+The answer should be:
+
+- a = 1
+- b = 15
+- c = (.1, .25, .3, .25, .1) (i.e. alpha / sum(alpha))
+
+# Generic parameter transformations (cont.)
+
+Let's see what the parameter transformation nimbleFunction does.
+
+```{r, eval=eval}
+nodes <- c('a','b','c[1:5]')
+transform_toy <- parameterTransform(toy, nodes)
+values <- c(3, 11, .2, .2, .2, .2, .2)
+# Calculate transformed parameters that have no boundaries
+transform_toy$transform(values)
+```
+
+What is the result?
+
+- `log(a)`
+- `logit((b-10)/(30-10))`
+- `(logit(c[1]), logit(c[2]/(1-c[1])), logit(c[3]/(1-sum(c[1:2])), ...)`
+
+```{r, eval=eval}
+# Invert to original parameters
+tr <- transform_toy$transform(values)
+transform_toy$inverseTransform(tr)
+```
+
+# Generic parameter transformations (cont.)
+
+Supported transformation cases:
+
+1. scalar unconstrained
+2. scalar semi-interval: (0, Inf)
+3. scalar interval-constrained: (0, 1)
+4. scalar semi-interval (-Inf, b) or (a, Inf)
+5. scalar interval-constrained (a, b)
+6. multivariate {normal, t}
+7. multivariate {wishart, inverse-wishart}
+8. multivariate dirichlet
+9. LKJ (prior for covariance matrix, `dLKJ_corr_cholesky`)
+
+# Example: Gradient-enabled optimization with transformations
+
+```{r, eval=eval}
+myMax <- nimbleFunction(
+  setup = function(model, wrt) {
+    calc_nodes <- model$getDependencies(wrt)
+    derivsInfo <- makeDerivsInfo(model, wrt, calc_nodes)
+    updateNodes <- derivsInfo$updateNodes
+    constantNodes <- derivsInfo$constantNodes
+    transformer <- parameterTransform(model, wrt)
+  },
+  # Use negative log Prob for convenience with optim
+  run = function(p_trans = double(1)) {
+    p <- transformer$inverseTransform(p_trans)
+    values(model, wrt) <<- p
+    log_prob <- model$calculate(calc_nodes)
+    return(-log_prob)
+    returnType(double())
+  },
+  methods = list(
+    grad_run = function(p_trans = double(1)) {
+      d <- derivs(run(p_trans), wrt = 1:length(p_trans), order = 1,
+                  model = model, updateNodes = updateNodes,
+                  constantNodes = constantNodes)
+      return(d$jacobian[1,])
+      returnType(double(1))
+    },
+    findMax = function(init_p = double(1)) {
+      init_p_trans <- transformer$transform(init_p)
+      optim_result <- optim(init_p_trans, fn = run, gr = grad_run,
+                            method = "CG")
+      opt_par <- transformer$inverseTransform(optim_result$par)
+      optim_result$par <- opt_par
+      return(optim_result)
+      returnType(optimResultNimbleList())
+    }
+ ),
+  buildDerivs = 'run'
+)
+```
+
+# Example: Gradient-enabled optimization with transformations (cont)
+
+Re-create the model with `buildDerivs=TRUE`.
+
+```{r, eval=eval}
+toy <- nimbleModel(nimbleCode({
+  a ~ dgamma(shape = 2, rate = 1)  # a >= 0
+  b ~ dunif(10, 30)                # 10 <= b <= 20
+  y ~ dnorm(b, sd = 5) 
+  alpha[1:5] <- c(3, 6, 7, 6, 3)
+  c[1:5] ~ ddirch( alpha[1:5] )    # sum(c) == 1
+}),
+data = list(y = 15),
+buildDerivs=TRUE)
+```
+
+# Example: Gradient-enabled optimization with transformations (cont)
+
+Build and use the `myMax` `nimbleFunction`:
+
+```{r, eval=eval}
+myMaxObj <- myMax(toy, c('a','b','c[1:5]'))
+compiled <- compileNimble(toy, myMaxObj)
+set.seed(123)
+compiled$toy$simulate()
+init_p <- values(compiled$toy, c('a','b','c[1:5]'))
+init_p
+compiled$myMaxObj$findMax(init_p)
+```
+
+The result should have
+
+- a = 1
+- b = 15
+- c = (.1, .25, .3, .25, .1)
+
+(i-th mode of a Dirichlet is $\frac{\alpha_{i}-1}{\sum_{i} (\alpha_{i} - 1)}$.)

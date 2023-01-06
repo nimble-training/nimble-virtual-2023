@@ -1,0 +1,16 @@
+---
+title: "Ecological models in NIMBLE"
+subtitle: "NIMBLE 2023 Virtual Workshop"
+author: "NIMBLE Development Team"
+date: "January 2023"
+output:
+  slidy_presentation: default
+  beamer_presentation: default
+---
+
+1. [Part 1: Capture-recapture (Cormack-Jolly-Seber)](ecological_models_part1_CJS.html)
+2. [Part 2: Hidden Markov models (HMMs)](ecological_models_part2_HMM.html)
+3. [Part 3: Occupancy models](ecological_models_part3_occupancy.html)
+4. [Part 4: N-mixture models](ecological_models_part4_ZIPNmixture.html)
+5. [Part 5: Spatial capture-recapture models ](ecological_models_part5_SCR.html)
+6. [Some key results from some papers](nimble_ecological_examples.pdf)

@@ -391,6 +391,10 @@ and <code>for</code>-loops in AD</li>
 <li>Generic parameter transformations</li>
 <li>Double-taping for potential efficiency</li>
 </ul>
+<p>Note: For <code>a^b</code>, if <code>b</code> will always be an
+integer, use <code>pow_int(a, b)</code> instead of <code>pow(a,b)</code>
+(which is identical to <code>a^b</code>). If <code>b</code> is a
+hard-coded integer, <code>pow_int</code> will be used automatically.</p>
 </div>
 <div id="when-values-are-baked-in-to-ad-tapes" class="section level1">
 <h1>When values are “baked in” to AD tapes</h1>
@@ -612,6 +616,8 @@ nf2obj$derivs_foo(2.5)</code></pre>
 <p>We may want to include <code>c</code> as an argument but gain
 efficiency by never tracking derivatives through it if we don’t need
 to.</p>
+<p>We will illustrate two ways to do this, using <span class="math inline">\(c = c_1 c_2\)</span> so there are two constants to
+ignore for derivative tracking.</p>
 <pre class="r"><code>nf3 &lt;- nimbleFunction(
   setup = TRUE,
   methods = list(
@@ -737,13 +743,12 @@ x)^p\)</span>.</p>
     foo = function(x = double(),
                    p = double(),
                    half = logical()) { # Will be an integer, but say I use double()
+      ans &lt;- 1
       if(!half) {
-        ans &lt;- x
         for(i in 1:p) {
           ans &lt;- ans*x
         }  
       } else {
-        ans &lt;- 0.5*x
         for(i in 1:p) {
           ans &lt;- ans*(0.5*x)
         }
@@ -775,20 +780,20 @@ Cnf4obj &lt;- compileNimble(nf4obj)</code></pre>
 nf4obj$derivs_foo(1.5, 3, FALSE)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 5.0625
+## [1] 3.375
 ## Field &quot;jacobian&quot;:
 ##      [,1]
-## [1,] 13.5
+## [1,] 6.75
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 <pre class="r"><code>Cnf4obj$derivs_foo(1.5, 3, FALSE)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 5.0625
+## [1] 3.375
 ## Field &quot;jacobian&quot;:
 ##      [,1]
-## [1,] 13.5
+## [1,] 6.75
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
@@ -796,20 +801,20 @@ nf4obj$derivs_foo(1.5, 3, FALSE)</code></pre>
 nf4obj$derivs_foo(2.5, 3, FALSE)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 39.0625
+## [1] 15.625
 ## Field &quot;jacobian&quot;:
-##      [,1]
-## [1,] 62.5
+##       [,1]
+## [1,] 18.75
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 <pre class="r"><code>Cnf4obj$derivs_foo(2.5, 3, FALSE)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 39.0625
+## [1] 15.625
 ## Field &quot;jacobian&quot;:
-##      [,1]
-## [1,] 62.5
+##       [,1]
+## [1,] 18.75
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
@@ -817,40 +822,40 @@ nf4obj$derivs_foo(2.5, 3, FALSE)</code></pre>
 nf4obj$derivs_foo(2.5, 4, TRUE)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 3.051758
+## [1] 2.441406
 ## Field &quot;jacobian&quot;:
-##          [,1]
-## [1,] 6.103516
+##         [,1]
+## [1,] 3.90625
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 <pre class="r"><code>Cnf4obj$derivs_foo(2.5, 4, TRUE) # ERROR: old values of p and half are used</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 39.0625
+## [1] 15.625
 ## Field &quot;jacobian&quot;:
-##      [,1]
-## [1,] 62.5
+##       [,1]
+## [1,] 18.75
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 <pre class="r"><code>Cnf4obj$derivs_foo(1.5, 4, TRUE, reset=TRUE) # Record a new tape (with any value of x)</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 0.2373047
+## [1] 0.3164062
 ## Field &quot;jacobian&quot;:
-##           [,1]
-## [1,] 0.7910156
+##         [,1]
+## [1,] 0.84375
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 <pre class="r"><code>Cnf4obj$derivs_foo(2.5, 4, TRUE) # CORRECT: with p=4 and half=TRUE</code></pre>
 <pre><code>## nimbleList object of type NIMBLE_ADCLASS
 ## Field &quot;value&quot;:
-## [1] 3.051758
+## [1] 2.441406
 ## Field &quot;jacobian&quot;:
-##          [,1]
-## [1,] 6.103516
+##         [,1]
+## [1,] 3.90625
 ## Field &quot;hessian&quot;:
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
@@ -858,14 +863,17 @@ nf4obj$derivs_foo(2.5, 4, TRUE)</code></pre>
 <div id="more-about-using-ad-with-models" class="section level1">
 <h1>More about using AD with models</h1>
 <ul>
-<li>When recording a tape using a model, all values that will be used
-need to be copied (internally) from the regular model to the AD model.
-You need to provide information about which nodes are needed, in two
-categories: <code>constantNodes</code> (not the same as
+<li><p>When recording a tape using a model, all values that will be used
+need to be copied (internally) from the regular model to the AD
+model.</p></li>
+<li><p>You need to provide information about which nodes are needed, in
+two categories: <code>constantNodes</code> (not the same as
 <code>constants</code> in <code>nimbleModel</code>) and
-<code>updateNodes</code>.</li>
-<li>When using a tape recorded with a model, one can update values that
-might have changed (without resetting the tape).</li>
+<code>updateNodes</code>.</p></li>
+<li><p>The function <code>makeDerivsInfo()</code> can determine these
+for you for most cases.</p></li>
+<li><p>When using a tape recorded with a model, one can update values
+that might have changed (without resetting the tape).</p></li>
 </ul>
 <p>Let’s look at an example (simple model used earlier):</p>
 <pre class="r"><code>model_code &lt;- nimbleCode({
@@ -889,8 +897,11 @@ and then returns the log probability density of <code>y</code>.</li>
 calls: <code>y</code>, <code>x</code>. These are
 <strong>constantNodes</strong>.</li>
 <li>Values that might change between derivative calls:
-<code>intercept</code>, <code>slope</code>, <code>sigma</code>. These
-are <strong>updateNodes</strong>.</li>
+<code>intercept</code> and <code>sigma</code>. These are
+<strong>updateNodes</strong>.</li>
+<li><code>slope</code> does not need to be in <code>updateNodes</code>
+because the “recorded” function will assign new value into the
+model.</li>
 </ul>
 </div>
 <div id="more-about-using-ad-with-models-cont." class="section level1">
@@ -927,7 +938,7 @@ I made <code>x</code> be data for illustration.</p>
   setup = function(model) {
     calc_nodes &lt;- c(&#39;mu&#39;, &#39;y&#39;) # Normally, use model-generic programming, not hand-coded nodes
     constantNodes &lt;- c(&#39;y&#39;,&#39;x&#39;)
-    updateNodes &lt;- c(&#39;slope&#39;,&#39;intercept&#39;,&#39;sigma&#39;)
+    updateNodes &lt;- c(&#39;intercept&#39;,&#39;sigma&#39;)
     param &lt;- &#39;slope&#39;
   },
   run = function(slope = double()) {
@@ -1059,6 +1070,66 @@ Cnf5obj$derivs_run(slope=0.8, reset=TRUE) # CORRECT</code></pre>
 ## &lt;0 x 0 x 0 array of double&gt;
 ## </code></pre>
 </div>
+<div id="more-about-using-ad-with-models-cont.-3" class="section level1">
+<h1>More about using AD with models (cont.)</h1>
+<p>This example illustrated <code>constantNodes</code> and
+<code>updateNodes</code> manually. In practice,
+<code>makeDerivsInfo</code> will do a good job of determining these.</p>
+<pre class="r"><code># Normally, use model-generic programming methods to determine calcNodes
+makeDerivsInfo(m, wrtNodes = &#39;slope&#39;, calcNodes = c(&#39;mu&#39;,&#39;y&#39;))</code></pre>
+<pre><code>## $updateNodes
+## [1] &quot;intercept&quot; &quot;sigma&quot;    
+## 
+## $constantNodes
+## [1] &quot;x&quot; &quot;y&quot;</code></pre>
+<p>Here is how we would use this in a <code>nimbleFunction</code>.</p>
+<pre class="r"><code>nf5b &lt;- nimbleFunction(
+  setup = function(model) {
+    param &lt;- &#39;slope&#39;
+    calc_nodes &lt;- c(&#39;mu&#39;, &#39;y&#39;) # Normally, use model-generic programming, not hand-coded nodes
+    # For a more general nimbleFunction,
+    # make param and/or calc_nodes be arguments
+    derivsInfo &lt;- makeDerivsInfo(model, param, calc_nodes)
+    constantNodes &lt;- derivsInfo$constantNodes
+    updateNodes &lt;- derivsInfo$updateNodes
+  },
+  run = function(slope = double()) {
+    temp &lt;- numeric(value = slope, length = 1)
+    values(model, param) &lt;&lt;- temp # c(slope) makes a scalar into a vector
+    log_prob &lt;- model$calculate(calc_nodes)
+    return(log_prob)
+    returnType(double())
+  },
+  methods = list(
+    derivs_run = function(slope = double(),
+                          reset = logical(0, default=FALSE)) {
+      wrt &lt;- numeric(length = 1, value = 1) # indices, not names
+      ans &lt;- derivs(run(slope), wrt = wrt,
+                    order = 0:1,
+                    updateNodes = updateNodes,
+                    constantNodes = constantNodes,
+                    model = model,
+                    reset = reset)
+      return(ans)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = &#39;run&#39;
+)</code></pre>
+<pre class="r"><code>nf5bobj &lt;- nf5b(m)
+# Run it once uncompiled to be sure there isn&#39;t a silly typo.
+nf5bobj$derivs_run(0.8)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] -7.190521
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 106.9778
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 x 0 array of double&gt;
+## </code></pre>
+<pre class="r"><code># This should work identically to nf5obj above.</code></pre>
+</div>
 <div id="using-ad-in-user-defined-functions-and-distributions" class="section level1">
 <h1>Using AD in user-defined functions and distributions</h1>
 <p>Simply add <code>buildDerivs=TRUE</code> to the
@@ -1069,10 +1140,70 @@ distribution.</p>
 to leave <code>param1</code> and <code>param2</code> out of derivative
 tracking.)</p>
 </div>
-<div id="using-makederivsinfo-to-determine-constantnodes-and-updatenodes" class="section level1">
-<h1>Using <code>makeDerivsInfo</code> to determine
-<code>constantNodes</code> and <code>updateNodes</code></h1>
-<p>TBD</p>
+<div id="double-taping-of-derivatives" class="section level1">
+<h1>Double-taping of derivatives</h1>
+<p>We can record derivatives of the playing of an AD tape.</p>
+<p>Let’s consider <code>exp(x^4)</code> to be a bit more
+interesting.</p>
+<pre class="r"><code>nf6 &lt;- nimbleFunction(
+  # Setup argument c will become member data of a C++ class.
+  # It will not have derivative-tracking.
+  setup = TRUE,
+  methods = list(
+    foo = function(x = double()) {
+      return(exp(x^4))
+      returnType(double())
+    },
+    gradient_foo = function(x=double(),
+                            reset = logical(0, default=FALSE)) {
+      d &lt;- derivs(foo(x), wrt = 1, order = 1, reset = reset)
+      g &lt;- d$jacobian[1,]
+      return(g)
+      returnType(double(1))
+    },
+    derivs_gradient_foo = function(x = double(),
+                                   order = integer(1),
+                                   reset = logical(0, default=FALSE)) {
+      d &lt;- derivs(gradient_foo(x=x, reset=reset),
+                  wrt = 1,
+                  order = order,
+                  reset = reset)
+      return(d)
+      returnType(ADNimbleList())
+    }
+  ),
+  buildDerivs = c(&#39;foo&#39;, &#39;gradient_foo&#39;)
+)</code></pre>
+</div>
+<div id="double-taping-of-derivatives-cont." class="section level1">
+<h1>Double-taping of derivatives (cont).</h1>
+<pre class="r"><code>nf6obj &lt;- nf6()
+cnf6obj &lt;- compileNimble(nf6obj)</code></pre>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<pre class="r"><code>cnf6obj$gradient_foo(.8)</code></pre>
+<pre><code>## [1] 3.084729</code></pre>
+<pre class="r"><code>cnf6obj$derivs_gradient_foo(.8, order = 0:2)</code></pre>
+<pre><code>## nimbleList object of type NIMBLE_ADCLASS
+## Field &quot;value&quot;:
+## [1] 3.084729
+## Field &quot;jacobian&quot;:
+##          [,1]
+## [1,] 17.88526
+## Field &quot;hessian&quot;:
+## , , 1
+## 
+##          [,1]
+## [1,] 112.9298</code></pre>
+</div>
+<div id="double-taping-of-derivatives-cont.-1" class="section level1">
+<h1>Double-taping of derivatives (cont).</h1>
+<p>When double-taping with <code>model$calculate</code> being taped, the
+<code>model</code>, <code>constantNodes</code> and
+<code>updatedNodes</code> need to be provided at the outer-most
+<code>derivs</code> call (and could be provided in the inner calls
+too).</p>
 </div>
 <div id="generic-parameter-transformations" class="section level1">
 <h1>Generic parameter transformations</h1>
@@ -1083,7 +1214,172 @@ parameter boundaries.</p>
 <p>In the AD beta-release, we provide a generic parameter transformation
 system. It is motivated by AD use cases and supports derivative
 tracking, but it can be used for any purpose.</p>
-<p>To be continued…</p>
+</div>
+<div id="generic-parameter-transformations-1" class="section level1">
+<h1>Generic parameter transformations</h1>
+<p>Here is an silly toy model with some constrained parameters (and no
+data):</p>
+<pre class="r"><code>toy &lt;- nimbleModel(nimbleCode({
+  a ~ dgamma(shape = 2, rate = 1)  # a &gt;= 0
+  b ~ dunif(10, 30)                # 10 &lt;= b &lt;= 20
+  y ~ dnorm(b, sd = 5) 
+  alpha[1:5] &lt;- c(3, 6, 7, 6, 3)
+  c[1:5] ~ ddirch( alpha[1:5] )    # sum(c) == 1
+}), data = list(y = 15))</code></pre>
+<pre><code>## Defining model</code></pre>
+<pre><code>## Building model</code></pre>
+<pre><code>## Setting data and initial values</code></pre>
+<pre><code>## Running calculate on model
+##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
+<pre><code>## Checking model sizes and dimensions</code></pre>
+<pre><code>##   [Note] This model is not fully initialized. This is not an error.
+##          To see which variables are not initialized, use model$initializeInfo().
+##          For more information on model initialization, see help(modelInitialization).</code></pre>
+<p>Say we want to optimize with respect to
+<code>(a, b, c[1:5])</code>.</p>
+<p>The answer should be:</p>
+<ul>
+<li>a = 1</li>
+<li>b = 15</li>
+<li>c = (.1, .25, .3, .25, .1) (i.e. alpha / sum(alpha))</li>
+</ul>
+</div>
+<div id="generic-parameter-transformations-cont." class="section level1">
+<h1>Generic parameter transformations (cont.)</h1>
+<p>Let’s see what the parameter transformation nimbleFunction does.</p>
+<pre class="r"><code>nodes &lt;- c(&#39;a&#39;,&#39;b&#39;,&#39;c[1:5]&#39;)
+transform_toy &lt;- parameterTransform(toy, nodes)
+values &lt;- c(3, 11, .2, .2, .2, .2, .2)
+# Calculate transformed parameters that have no boundaries
+transform_toy$transform(values)</code></pre>
+<pre><code>## [1]  1.098612e+00 -2.944439e+00 -1.386294e+00 -1.098612e+00 -6.931472e-01
+## [6]  4.440892e-16</code></pre>
+<p>What is the result?</p>
+<ul>
+<li><code>log(a)</code></li>
+<li><code>logit((b-10)/(30-10))</code></li>
+<li><code>(logit(c[1]), logit(c[2]/(1-c[1])), logit(c[3]/(1-sum(c[1:2])), ...)</code></li>
+</ul>
+<pre class="r"><code># Invert to original parameters
+tr &lt;- transform_toy$transform(values)
+transform_toy$inverseTransform(tr)</code></pre>
+<pre><code>## [1]  3.0 11.0  0.2  0.2  0.2  0.2  0.2</code></pre>
+</div>
+<div id="generic-parameter-transformations-cont.-1" class="section level1">
+<h1>Generic parameter transformations (cont.)</h1>
+<p>Supported transformation cases:</p>
+<ol style="list-style-type: decimal">
+<li>scalar unconstrained</li>
+<li>scalar semi-interval: (0, Inf)</li>
+<li>scalar interval-constrained: (0, 1)</li>
+<li>scalar semi-interval (-Inf, b) or (a, Inf)</li>
+<li>scalar interval-constrained (a, b)</li>
+<li>multivariate {normal, t}</li>
+<li>multivariate {wishart, inverse-wishart}</li>
+<li>multivariate dirichlet</li>
+<li>LKJ (prior for covariance matrix,
+<code>dLKJ_corr_cholesky</code>)</li>
+</ol>
+</div>
+<div id="example-gradient-enabled-optimization-with-transformations" class="section level1">
+<h1>Example: Gradient-enabled optimization with transformations</h1>
+<pre class="r"><code>myMax &lt;- nimbleFunction(
+  setup = function(model, wrt) {
+    calc_nodes &lt;- model$getDependencies(wrt)
+    derivsInfo &lt;- makeDerivsInfo(model, wrt, calc_nodes)
+    updateNodes &lt;- derivsInfo$updateNodes
+    constantNodes &lt;- derivsInfo$constantNodes
+    transformer &lt;- parameterTransform(model, wrt)
+  },
+  # Use negative log Prob for convenience with optim
+  run = function(p_trans = double(1)) {
+    p &lt;- transformer$inverseTransform(p_trans)
+    values(model, wrt) &lt;&lt;- p
+    log_prob &lt;- model$calculate(calc_nodes)
+    return(-log_prob)
+    returnType(double())
+  },
+  methods = list(
+    grad_run = function(p_trans = double(1)) {
+      d &lt;- derivs(run(p_trans), wrt = 1:length(p_trans), order = 1,
+                  model = model, updateNodes = updateNodes,
+                  constantNodes = constantNodes)
+      return(d$jacobian[1,])
+      returnType(double(1))
+    },
+    findMax = function(init_p = double(1)) {
+      init_p_trans &lt;- transformer$transform(init_p)
+      optim_result &lt;- optim(init_p_trans, fn = run, gr = grad_run,
+                            method = &quot;CG&quot;)
+      opt_par &lt;- transformer$inverseTransform(optim_result$par)
+      optim_result$par &lt;- opt_par
+      return(optim_result)
+      returnType(optimResultNimbleList())
+    }
+ ),
+  buildDerivs = &#39;run&#39;
+)</code></pre>
+</div>
+<div id="example-gradient-enabled-optimization-with-transformations-cont" class="section level1">
+<h1>Example: Gradient-enabled optimization with transformations
+(cont)</h1>
+<p>Re-create the model with <code>buildDerivs=TRUE</code>.</p>
+<pre class="r"><code>toy &lt;- nimbleModel(nimbleCode({
+  a ~ dgamma(shape = 2, rate = 1)  # a &gt;= 0
+  b ~ dunif(10, 30)                # 10 &lt;= b &lt;= 20
+  y ~ dnorm(b, sd = 5) 
+  alpha[1:5] &lt;- c(3, 6, 7, 6, 3)
+  c[1:5] ~ ddirch( alpha[1:5] )    # sum(c) == 1
+}),
+data = list(y = 15),
+buildDerivs=TRUE)</code></pre>
+<pre><code>## Defining model</code></pre>
+<pre><code>## Building model</code></pre>
+<pre><code>## Setting data and initial values</code></pre>
+<pre><code>## Running calculate on model
+##   [Note] Any error reports that follow may simply reflect missing values in model variables.</code></pre>
+<pre><code>## Checking model sizes and dimensions</code></pre>
+<pre><code>##   [Note] This model is not fully initialized. This is not an error.
+##          To see which variables are not initialized, use model$initializeInfo().
+##          For more information on model initialization, see help(modelInitialization).</code></pre>
+</div>
+<div id="example-gradient-enabled-optimization-with-transformations-cont-1" class="section level1">
+<h1>Example: Gradient-enabled optimization with transformations
+(cont)</h1>
+<p>Build and use the <code>myMax</code> <code>nimbleFunction</code>:</p>
+<pre class="r"><code>myMaxObj &lt;- myMax(toy, c(&#39;a&#39;,&#39;b&#39;,&#39;c[1:5]&#39;))
+compiled &lt;- compileNimble(toy, myMaxObj)</code></pre>
+<pre><code>## Compiling
+##   [Note] This may take a minute.
+##   [Note] Use &#39;showCompilerOutput = TRUE&#39; to see C++ compilation details.</code></pre>
+<pre class="r"><code>set.seed(123)
+compiled$toy$simulate()
+init_p &lt;- values(compiled$toy, c(&#39;a&#39;,&#39;b&#39;,&#39;c[1:5]&#39;))
+init_p</code></pre>
+<pre><code>## [1]  0.8920936 27.6603481  0.1762612  0.1792561  0.2161790  0.3244852  0.1038185</code></pre>
+<pre class="r"><code>compiled$myMaxObj$findMax(init_p)</code></pre>
+<pre><code>## nimbleList object of type OptimResultNimbleList
+## Field &quot;par&quot;:
+## [1]  0.99999943 15.00000491  0.10000001  0.25000000  0.30000012  0.24999989
+## [7]  0.09999998
+## Field &quot;value&quot;:
+## [1] -0.4229708
+## Field &quot;counts&quot;:
+## [1] 70 31
+## Field &quot;convergence&quot;:
+## [1] 0
+## Field &quot;message&quot;:
+## [1] &quot;&quot;
+## Field &quot;hessian&quot;:
+## &lt;0 x 0 matrix&gt;</code></pre>
+<p>The result should have</p>
+<ul>
+<li>a = 1</li>
+<li>b = 15</li>
+<li>c = (.1, .25, .3, .25, .1)</li>
+</ul>
+<p>(i-th mode of a Dirichlet is <span class="math inline">\(\frac{\alpha_{i}-1}{\sum_{i} (\alpha_{i} -
+1)}\)</span>.)</p>
 </div>
 
 
